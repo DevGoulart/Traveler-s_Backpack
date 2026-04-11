@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { View, TextInput, Button, FlatList, Text, Pressable, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function TodoScreen() {
   const [task, setTask] = useState('');
@@ -24,6 +25,10 @@ export default function TodoScreen() {
     );
   };
 
+  const deleteTask = (id) => {
+    setList(list.filter((item) => item.id !== id));
+  };
+
   return (
     <View style={styles.container}>
       <TextInput
@@ -39,14 +44,25 @@ export default function TodoScreen() {
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
         renderItem={({ item }) => (
-          <Pressable style={styles.item} onPress={() => toggleTask(item.id)}>
-            <View style={[styles.checkbox, item.completed && styles.checkboxChecked]}>
-              {item.completed ? <Text style={styles.checkboxMark}>✓</Text> : null}
-            </View>
-            <Text style={[styles.itemText, item.completed && styles.itemTextCompleted]}>
-              {item.text}
-            </Text>
-          </Pressable>
+          <View style={styles.item}>
+            <Pressable style={styles.itemMain} onPress={() => toggleTask(item.id)}>
+              <View style={[styles.checkbox, item.completed && styles.checkboxChecked]}>
+                {item.completed ? <Text style={styles.checkboxMark}>✓</Text> : null}
+              </View>
+              <Text style={[styles.itemText, item.completed && styles.itemTextCompleted]}>
+                {item.text}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => deleteTask(item.id)}
+              style={styles.deleteButton}
+              accessibilityRole="button"
+              accessibilityLabel="Excluir tarefa"
+            >
+              <Ionicons name="trash-outline" size={18} color="#dc2626" />
+            </Pressable>
+          </View>
         )}
       />
     </View>
@@ -73,13 +89,18 @@ const styles = StyleSheet.create({
   item: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderWidth: 1,
     borderColor: '#e2e8f0',
     borderRadius: 12,
     backgroundColor: '#fff',
+  },
+  itemMain: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
   checkbox: {
     width: 24,
@@ -107,5 +128,10 @@ const styles = StyleSheet.create({
   itemTextCompleted: {
     textDecorationLine: 'line-through',
     color: '#94a3b8',
+  },
+  deleteButton: {
+    marginLeft: 10,
+    padding: 6,
+    borderRadius: 8,
   },
 });
