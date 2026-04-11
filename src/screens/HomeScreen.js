@@ -1,13 +1,50 @@
-import { View, Button } from 'react-native';
+import { View, Text, FlatList, Image, StyleSheet } from 'react-native';
 
-export default function HomeScreen({ navigation }) {
+const posts = [
+  {
+    id: '1',
+    user: 'João',
+    image: 'https://picsum.photos/500/500',
+    description: 'Curtindo o dia 😎'
+  },
+  {
+    id: '2',
+    user: 'Maria',
+    image: 'https://picsum.photos/500/501',
+    description: 'Olha essa paisagem!'
+  },
+];
+
+export default function HomeScreen() {
   return (
-    <View style={{ marginTop: 50 }}>
-      <Button title="Biometria" onPress={() => navigation.navigate('Biometria')} />
-      <Button title="Camera" onPress={() => navigation.navigate('Camera')} />
-      <Button title="Mapa GPS" onPress={() => navigation.navigate('Mapa')} />
-      <Button title="Juros" onPress={() => navigation.navigate('Juros')} />
-      <Button title="ToDo" onPress={() => navigation.navigate('ToDo')} />
-    </View>
+    <FlatList
+      data={posts}
+      keyExtractor={(item) => item.id}
+      renderItem={({ item }) => (
+        <View style={styles.post}>
+          <Text style={styles.user}>{item.user}</Text>
+          <Image source={{ uri: item.image }} style={styles.image} />
+          <Text style={styles.description}>{item.description}</Text>
+        </View>
+      )}
+    />
   );
 }
+
+const styles = StyleSheet.create({
+  post: {
+    marginBottom: 20,
+    backgroundColor: '#fff',
+  },
+  user: {
+    fontWeight: 'bold',
+    padding: 10,
+  },
+  image: {
+    width: '100%',
+    height: 300,
+  },
+  description: {
+    padding: 10,
+  },
+});
