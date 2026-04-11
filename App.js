@@ -21,7 +21,7 @@ function Tabs() {
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarShowLabel: false, // 🔥 tira texto
+        tabBarShowLabel: false,
 
         tabBarIcon: ({ focused, color, size }) => {
           let iconName;
