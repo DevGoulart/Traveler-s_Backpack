@@ -4,13 +4,13 @@ const posts = [
   {
     id: '1',
     user: 'João',
-    image: 'https://picsum.photos/500/500',
+    image: require('../../assets/maranhenses.jpg'),
     description: 'Curtindo o dia 😎'
   },
   {
     id: '2',
     user: 'Maria',
-    image: 'https://picsum.photos/500/501',
+    image: require('../../assets/rio.jpg'),
     description: 'Olha essa paisagem!'
   },
 ];
@@ -23,7 +23,7 @@ export default function HomeScreen() {
       renderItem={({ item }) => (
         <View style={styles.post}>
           <Text style={styles.user}>{item.user}</Text>
-          <Image source={{ uri: item.image }} style={styles.image} />
+          <Image source={item.image} style={styles.image} />
           <Text style={styles.description}>{item.description}</Text>
         </View>
       )}
