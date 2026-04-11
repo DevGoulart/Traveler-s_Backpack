@@ -40,11 +40,16 @@ export default function LoginScreen({ navigation }) {
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1 }}
+      style={styles.keyboardContainer}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 30 : 0}
     >
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <ScrollView contentContainerStyle={styles.container}>
+        <ScrollView
+          contentContainerStyle={styles.container}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+        >
 
           <Text style={styles.title}>Traveler's Backpack</Text>
 
@@ -54,7 +59,6 @@ export default function LoginScreen({ navigation }) {
             style={styles.input}
             value={user}
             onChangeText={setUser}
-            autoFocus
             returnKeyType="next"
             onSubmitEditing={() => passwordRef.current.focus()}
           />
@@ -85,11 +89,15 @@ export default function LoginScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
+  keyboardContainer: {
+    flex: 1,
+  },
   container: {
     flexGrow: 1,
     backgroundColor: '#d9fdd3',
     justifyContent: 'center',
     padding: 20,
+    paddingBottom: 32,
   },
 
   title: {
