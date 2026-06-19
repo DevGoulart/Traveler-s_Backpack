@@ -13,8 +13,10 @@ import {
 
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useState, useRef } from 'react';
+import { useSocial } from '../context/SocialContext';
 
 export default function LoginScreen({ navigation }) {
+  const { setCurrentUser } = useSocial();
   const [user, setUser] = useState('');
   const [password, setPassword] = useState('');
 
@@ -26,12 +28,14 @@ export default function LoginScreen({ navigation }) {
     });
 
     if (result.success) {
+      await setCurrentUser('Viajante');
       navigation.replace('Home');
     }
   };
 
-  const loginNormal = () => {
+  const loginNormal = async () => {
     if (user === 'admin' && password === '123') {
+      await setCurrentUser(user === 'admin' ? 'Admin' : user);
       navigation.replace('Home');
     } else {
       alert('Usuário ou senha inválidos');

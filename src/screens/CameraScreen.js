@@ -2,22 +2,42 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Location from 'expo-location';
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, Button, StyleSheet, Image, FlatList, Pressable, ScrollView } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Image,
+  FlatList,
+  Pressable,
+  ScrollView,
+  TextInput,
+  ActivityIndicator,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSocial } from '../context/SocialContext';
+import colors from '../theme/colors';
+import spacing from '../theme/spacing';
 
 const STORAGE_KEY = '@traveler_backpack_camera_history';
 const MAX_HISTORY_ITEMS = 10;
 
 export default function CameraScreen() {
   const cameraRef = useRef(null);
+  const insets = useSafeAreaInsets();
   const [permission, requestPermission] = useCameraPermissions();
   const [lastPhotoUri, setLastPhotoUri] = useState('');
   const [history, setHistory] = useState([]);
   const [selectedPhoto, setSelectedPhoto] = useState(null);
+  const [publishMode, setPublishMode] = useState('post');
+  const [caption, setCaption] = useState('');
+  const [publishing, setPublishing] = useState(false);
+  const [showPublishPanel, setShowPublishPanel] = useState(false);
+
+  const { currentUser, addPost, addStory } = useSocial();
 
   const normalizeHistory = (items) => {
-    if (!Array.isArray(items)) {
-      return [];
-    }
+    if (!Array.isArray(items)) return [];
 
     return items
       .map((entry, index) => {
@@ -25,16 +45,16 @@ export default function CameraScreen() {
           return {
             id: `legacy-${index}-${entry}`,
             uri: entry,
-            description: 'Localizacao indisponivel (foto antiga).',
+            description: 'Localização indisponível (foto antiga).',
             createdAt: null,
           };
         }
 
-        if (entry && typeof entry === 'object' && entry.uri) {
+        if (entry?.uri) {
           return {
             id: entry.id || `${Date.now()}-${index}`,
             uri: entry.uri,
-            description: entry.description || 'Localizacao indisponivel.',
+            description: entry.description || 'Localização indisponível.',
             createdAt: entry.createdAt || null,
           };
         }
@@ -48,7 +68,7 @@ export default function CameraScreen() {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        return 'Localizacao nao autorizada pelo usuario.';
+        return 'Localização não autorizada pelo usuário.';
       }
 
       const current = await Location.getCurrentPositionAsync({});
@@ -67,13 +87,13 @@ export default function CameraScreen() {
         const address = [street, cityState].filter(Boolean).join(' | ');
 
         if (address) {
-          return `Local: ${address} (${latitude}, ${longitude})`;
+          return { full: `Local: ${address} (${latitude}, ${longitude})`, short: address };
         }
       }
 
-      return `Local: coordenadas ${latitude}, ${longitude}`;
+      return { full: `Local: coordenadas ${latitude}, ${longitude}`, short: `${latitude}, ${longitude}` };
     } catch {
-      return 'Localizacao indisponivel no momento da captura.';
+      return { full: 'Localização indisponível no momento da captura.', short: null };
     }
   };
 
@@ -81,13 +101,9 @@ export default function CameraScreen() {
     const loadHistory = async () => {
       try {
         const stored = await AsyncStorage.getItem(STORAGE_KEY);
-        if (!stored) {
-          return;
-        }
+        if (!stored) return;
 
-        const parsed = JSON.parse(stored);
-        const normalized = normalizeHistory(parsed);
-
+        const normalized = normalizeHistory(JSON.parse(stored));
         setHistory(normalized);
         if (normalized.length > 0) {
           setLastPhotoUri(normalized[0].uri);
@@ -95,7 +111,6 @@ export default function CameraScreen() {
         }
       } catch {
         setHistory([]);
-        setSelectedPhoto(null);
       }
     };
 
@@ -103,35 +118,62 @@ export default function CameraScreen() {
   }, []);
 
   const takePhoto = async () => {
-    if (!cameraRef.current) {
-      return;
-    }
+    if (!cameraRef.current) return;
 
     try {
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.7 });
       const uri = photo?.uri;
+      if (!uri) return;
 
-      if (!uri) {
-        return;
-      }
-
-      const description = await buildLocationDescription();
-      const createdAt = new Date().toISOString();
+      const location = await buildLocationDescription();
       const newItem = {
         id: Date.now().toString(),
         uri,
-        description,
-        createdAt,
+        description: location.full,
+        locationShort: location.short,
+        createdAt: new Date().toISOString(),
       };
 
       const updatedHistory = [newItem, ...history].slice(0, MAX_HISTORY_ITEMS);
-
       setLastPhotoUri(uri);
       setSelectedPhoto(newItem);
       setHistory(updatedHistory);
+      setShowPublishPanel(true);
+      setCaption('');
       await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedHistory));
     } catch {
-      // Silently ignore capture errors to keep UI responsive.
+      // Silently ignore capture errors.
+    }
+  };
+
+  const publishPhoto = async () => {
+    if (!selectedPhoto || publishing) return;
+
+    const username = currentUser || 'Viajante';
+    setPublishing(true);
+
+    try {
+      if (publishMode === 'story') {
+        await addStory({
+          userId: username.toLowerCase(),
+          username,
+          uri: selectedPhoto.uri,
+        });
+      } else {
+        await addPost({
+          userId: username.toLowerCase(),
+          username,
+          imageUri: selectedPhoto.uri,
+          uri: selectedPhoto.uri,
+          description: caption.trim() || 'Nova aventura! 🌍',
+          location: selectedPhoto.locationShort,
+        });
+      }
+
+      setShowPublishPanel(false);
+      setCaption('');
+    } finally {
+      setPublishing(false);
     }
   };
 
@@ -139,6 +181,7 @@ export default function CameraScreen() {
     setHistory([]);
     setLastPhotoUri('');
     setSelectedPhoto(null);
+    setShowPublishPanel(false);
     await AsyncStorage.removeItem(STORAGE_KEY);
   };
 
@@ -147,40 +190,111 @@ export default function CameraScreen() {
   if (!permission.granted) {
     return (
       <View style={styles.permissionContainer}>
-        <Text style={styles.permissionText}>Permissão da câmera necessária</Text>
-        <Button title="Permitir" onPress={requestPermission} />
+        <Ionicons name="camera-outline" size={64} color={colors.primary} />
+        <Text style={styles.permissionTitle}>Acesso à câmera</Text>
+        <Text style={styles.permissionText}>
+          Permita o acesso para capturar fotos e compartilhar suas aventuras.
+        </Text>
+        <Pressable style={styles.permissionButton} onPress={requestPermission}>
+          <Text style={styles.permissionButtonText}>Permitir câmera</Text>
+        </Pressable>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + spacing.md }]}>
+        <Text style={styles.screenTitle}>Câmera</Text>
+
+        <View style={styles.modeSelector}>
+          <Pressable
+            style={[styles.modeButton, publishMode === 'post' && styles.modeButtonActive]}
+            onPress={() => setPublishMode('post')}
+          >
+            <Ionicons
+              name="grid-outline"
+              size={18}
+              color={publishMode === 'post' ? '#fff' : colors.textSecondary}
+            />
+            <Text style={[styles.modeText, publishMode === 'post' && styles.modeTextActive]}>Post</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.modeButton, publishMode === 'story' && styles.modeButtonActive]}
+            onPress={() => setPublishMode('story')}
+          >
+            <Ionicons
+              name="ellipse-outline"
+              size={18}
+              color={publishMode === 'story' ? '#fff' : colors.textSecondary}
+            />
+            <Text style={[styles.modeText, publishMode === 'story' && styles.modeTextActive]}>Story</Text>
+          </Pressable>
+        </View>
+
         <View style={styles.cameraWrapper}>
-          <CameraView ref={cameraRef} style={styles.camera} />
+          <CameraView ref={cameraRef} style={styles.camera} facing="back" />
+          <Pressable style={styles.captureButton} onPress={takePhoto}>
+            <View style={styles.captureInner} />
+          </Pressable>
         </View>
 
-        <View style={styles.actions}>
-          <Button title="Tirar foto" onPress={takePhoto} />
-          <Button title="Limpar histórico" color="#b91c1c" onPress={clearHistory} />
-        </View>
+        {showPublishPanel && selectedPhoto ? (
+          <View style={styles.publishPanel}>
+            <Image source={{ uri: selectedPhoto.uri }} style={styles.publishPreview} />
+            <View style={styles.publishContent}>
+              <Text style={styles.publishTitle}>
+                Publicar como {publishMode === 'story' ? 'Story' : 'Post'}
+              </Text>
+              {publishMode === 'post' && (
+                <TextInput
+                  style={styles.captionInput}
+                  placeholder="Escreva uma legenda..."
+                  placeholderTextColor={colors.textSecondary}
+                  value={caption}
+                  onChangeText={setCaption}
+                  multiline
+                />
+              )}
+              <View style={styles.publishActions}>
+                <Pressable style={styles.cancelButton} onPress={() => setShowPublishPanel(false)}>
+                  <Text style={styles.cancelText}>Cancelar</Text>
+                </Pressable>
+                <Pressable style={styles.publishButton} onPress={publishPhoto} disabled={publishing}>
+                  {publishing ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Text style={styles.publishButtonText}>Compartilhar</Text>
+                  )}
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        ) : null}
 
-        {lastPhotoUri ? (
-          <Text style={styles.lastPhotoText} numberOfLines={1}>
-            Ultima foto salva: {lastPhotoUri}
-          </Text>
-        ) : (
-          <Text style={styles.lastPhotoText}>Nenhuma foto salva ainda</Text>
-        )}
+        <View style={styles.historyHeader}>
+          <Text style={styles.sectionTitle}>Histórico recente</Text>
+          {history.length > 0 && (
+            <Pressable onPress={clearHistory}>
+              <Text style={styles.clearText}>Limpar</Text>
+            </Pressable>
+          )}
+        </View>
 
         <FlatList
           data={history}
           keyExtractor={(item) => item.id}
           horizontal
+          scrollEnabled={history.length > 0}
           contentContainerStyle={styles.historyList}
-          ListEmptyComponent={<Text style={styles.emptyHistory}>Historico vazio</Text>}
+          ListEmptyComponent={<Text style={styles.emptyHistory}>Nenhuma foto ainda</Text>}
           renderItem={({ item }) => (
-            <Pressable onPress={() => setSelectedPhoto(item)}>
+            <Pressable
+              onPress={() => {
+                setSelectedPhoto(item);
+                setShowPublishPanel(true);
+              }}
+            >
               <Image
                 source={{ uri: item.uri }}
                 style={[
@@ -192,16 +306,22 @@ export default function CameraScreen() {
           )}
         />
 
-        {selectedPhoto ? (
+        {selectedPhoto && !showPublishPanel ? (
           <View style={styles.detailCard}>
             <Image source={{ uri: selectedPhoto.uri }} style={styles.detailImage} />
-            <Text style={styles.detailTitle}>Descricao</Text>
+            <Text style={styles.detailTitle}>Localização</Text>
             <Text style={styles.detailDescription}>{selectedPhoto.description}</Text>
             {selectedPhoto.createdAt ? (
               <Text style={styles.detailDate}>
                 Capturada em: {new Date(selectedPhoto.createdAt).toLocaleString()}
               </Text>
             ) : null}
+            <Pressable
+              style={styles.republishButton}
+              onPress={() => setShowPublishPanel(true)}
+            >
+              <Text style={styles.republishText}>Publicar no feed</Text>
+            </Pressable>
           </View>
         ) : null}
       </ScrollView>
@@ -212,86 +332,235 @@ export default function CameraScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: colors.background,
   },
   scrollContent: {
-    paddingTop: 16,
-    paddingHorizontal: 12,
-    paddingBottom: 24,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.xxl,
+  },
+  screenTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: spacing.md,
+  },
+  modeSelector: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  modeButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: 10,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  modeButtonActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  modeText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textSecondary,
+  },
+  modeTextActive: {
+    color: '#fff',
+  },
+  cameraWrapper: {
+    height: 380,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#000',
+    position: 'relative',
+  },
+  camera: {
+    flex: 1,
+  },
+  captureButton: {
+    position: 'absolute',
+    bottom: spacing.lg,
+    alignSelf: 'center',
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    borderWidth: 4,
+    borderColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  captureInner: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: '#fff',
+  },
+  publishPanel: {
+    marginTop: spacing.lg,
+    borderRadius: 16,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+  },
+  publishPreview: {
+    width: '100%',
+    height: 200,
+    backgroundColor: colors.borderLight,
+  },
+  publishContent: {
+    padding: spacing.lg,
+    gap: spacing.md,
+  },
+  publishTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  captionInput: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    padding: spacing.md,
+    minHeight: 80,
+    textAlignVertical: 'top',
+    color: colors.text,
+    fontSize: 14,
+  },
+  publishActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: spacing.md,
+  },
+  cancelButton: {
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+  },
+  cancelText: {
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  publishButton: {
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xl,
+    borderRadius: 10,
+    minWidth: 120,
+    alignItems: 'center',
+  },
+  publishButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+  },
+  historyHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: spacing.xl,
+    marginBottom: spacing.sm,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  clearText: {
+    color: colors.danger,
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  historyList: {
+    gap: spacing.sm,
+    paddingBottom: spacing.sm,
+  },
+  emptyHistory: {
+    color: colors.textSecondary,
+  },
+  previewImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 10,
+    backgroundColor: colors.borderLight,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  previewImageSelected: {
+    borderColor: colors.primary,
+  },
+  detailCard: {
+    marginTop: spacing.lg,
+    borderRadius: 16,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.lg,
+    gap: spacing.sm,
+  },
+  detailImage: {
+    width: '100%',
+    height: 220,
+    borderRadius: 12,
+    backgroundColor: colors.borderLight,
+  },
+  detailTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  detailDescription: {
+    color: colors.textSecondary,
+    lineHeight: 20,
+  },
+  detailDate: {
+    color: colors.textMuted,
+    fontSize: 12,
+  },
+  republishButton: {
+    marginTop: spacing.sm,
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.md,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  republishText: {
+    color: '#fff',
+    fontWeight: '700',
   },
   permissionContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
-    paddingHorizontal: 24,
+    paddingHorizontal: spacing.xxl,
+    backgroundColor: colors.background,
+    gap: spacing.md,
+  },
+  permissionTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.text,
   },
   permissionText: {
-    fontSize: 16,
-    color: '#0f172a',
+    fontSize: 15,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 22,
   },
-  cameraWrapper: {
-    height: 360,
-    borderRadius: 14,
-    overflow: 'hidden',
-    backgroundColor: '#000',
+  permissionButton: {
+    marginTop: spacing.md,
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xxl,
+    borderRadius: 12,
   },
-  camera: {
-    flex: 1,
-  },
-  actions: {
-    marginTop: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  lastPhotoText: {
-    marginTop: 12,
-    color: '#334155',
-  },
-  historyList: {
-    marginTop: 12,
-    gap: 10,
-    paddingBottom: 8,
-  },
-  emptyHistory: {
-    color: '#64748b',
-  },
-  previewImage: {
-    width: 90,
-    height: 90,
-    borderRadius: 10,
-    backgroundColor: '#e2e8f0',
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  previewImageSelected: {
-    borderColor: '#16a34a',
-  },
-  detailCard: {
-    marginTop: 14,
-    borderRadius: 14,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    padding: 12,
-    gap: 8,
-  },
-  detailImage: {
-    width: '100%',
-    height: 220,
-    borderRadius: 10,
-    backgroundColor: '#e2e8f0',
-  },
-  detailTitle: {
-    fontSize: 16,
+  permissionButtonText: {
+    color: '#fff',
     fontWeight: '700',
-    color: '#0f172a',
-  },
-  detailDescription: {
-    color: '#1e293b',
-  },
-  detailDate: {
-    color: '#475569',
-    fontSize: 12,
+    fontSize: 16,
   },
 });

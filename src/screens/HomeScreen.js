@@ -1,50 +1,82 @@
-import { View, Text, FlatList, Image, StyleSheet } from 'react-native';
-
-const posts = [
-  {
-    id: '1',
-    user: 'João',
-    image: require('../../assets/maranhenses.jpg'),
-    description: 'Curtindo o dia 😎'
-  },
-  {
-    id: '2',
-    user: 'Maria',
-    image: require('../../assets/rio.jpg'),
-    description: 'Olha essa paisagem!'
-  },
-];
+import { FlatList, RefreshControl, StyleSheet, View, ActivityIndicator } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import FeedHeader from '../components/FeedHeader';
+import StoriesRow from '../components/StoriesRow';
+import PostCard from '../components/PostCard';
+import { useSocial } from '../context/SocialContext';
+import colors from '../theme/colors';
 
 export default function HomeScreen() {
+  const navigation = useNavigation();
+  const {
+    posts,
+    stories,
+    currentUser,
+    loading,
+    refreshing,
+    refreshFeed,
+    toggleLike,
+    addComment,
+  } = useSocial();
+
+  const handleStoryPress = (story) => {
+    navigation.navigate('StoryViewer', { storyGroup: story, allStories: stories });
+  };
+
+  const handleAddStory = () => {
+    navigation.navigate('CameraTab');
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.loading}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
   return (
-    <FlatList
-      data={posts}
-      keyExtractor={(item) => item.id}
-      renderItem={({ item }) => (
-        <View style={styles.post}>
-          <Text style={styles.user}>{item.user}</Text>
-          <Image source={item.image} style={styles.image} />
-          <Text style={styles.description}>{item.description}</Text>
-        </View>
-      )}
-    />
+    <View style={styles.container}>
+      <FlatList
+        data={posts}
+        keyExtractor={(item) => item.id}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={refreshFeed}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        }
+        ListHeaderComponent={
+          <>
+            <FeedHeader />
+            <StoriesRow
+              stories={stories}
+              currentUser={currentUser}
+              onStoryPress={handleStoryPress}
+              onAddStory={handleAddStory}
+            />
+          </>
+        }
+        renderItem={({ item }) => (
+          <PostCard post={item} onLike={toggleLike} onComment={addComment} />
+        )}
+        showsVerticalScrollIndicator={false}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  post: {
-    marginBottom: 20,
-    backgroundColor: '#fff',
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
   },
-  user: {
-    fontWeight: 'bold',
-    padding: 10,
-  },
-  image: {
-    width: '100%',
-    height: 300,
-  },
-  description: {
-    padding: 10,
+  loading: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.background,
   },
 });

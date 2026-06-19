@@ -1,0 +1,16 @@
+export default {
+  primary: '#2e7d32',
+  primaryLight: '#4caf50',
+  primaryDark: '#1b5e20',
+  accent: '#16a34a',
+  background: '#fafafa',
+  surface: '#ffffff',
+  border: '#dbdbdb',
+  borderLight: '#efefef',
+  text: '#262626',
+  textSecondary: '#8e8e8e',
+  textMuted: '#c7c7c7',
+  danger: '#ed4956',
+  storyGradient: ['#f09433', '#e6683c', '#dc2743', '#cc2366', '#bc1888'],
+  avatarColors: ['#2e7d32', '#1565c0', '#6a1b9a', '#c62828', '#ef6c00', '#00838f'],
+};
