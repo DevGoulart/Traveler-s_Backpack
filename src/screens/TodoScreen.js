@@ -1,33 +1,52 @@
-import { useState } from 'react';
-import { View, TextInput, Button, FlatList, Text, Pressable, StyleSheet } from 'react-native';
+import { useEffect, useState } from 'react';
+import { View, TextInput, Button, FlatList, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { loadTodos, createTodo, toggleTodo, deleteTodo } from '../storage/socialStorage';
+import colors from '../theme/colors';
 
 export default function TodoScreen() {
   const [task, setTask] = useState('');
   const [list, setList] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const addTask = () => {
+  useEffect(() => {
+    loadTodos()
+      .then((items) => {
+        setList(items.map((item) => ({ ...item, completed: !!item.completed })));
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  const addTask = async () => {
     const trimmedTask = task.trim();
+    if (!trimmedTask) return;
 
-    if (!trimmedTask) {
-      return;
-    }
-
-    setList([...list, { id: Date.now().toString(), text: trimmedTask, completed: false }]);
+    const newTodo = await createTodo(trimmedTask);
+    setList((prev) => [{ ...newTodo, completed: false }, ...prev]);
     setTask('');
   };
 
-  const toggleTask = (id) => {
-    setList(
-      list.map((item) =>
+  const toggleTask = async (id) => {
+    await toggleTodo(id);
+    setList((prev) =>
+      prev.map((item) =>
         item.id === id ? { ...item, completed: !item.completed } : item
       )
     );
   };
 
-  const deleteTask = (id) => {
-    setList(list.filter((item) => item.id !== id));
+  const deleteTaskItem = async (id) => {
+    await deleteTodo(id);
+    setList((prev) => prev.filter((item) => item.id !== id));
   };
+
+  if (loading) {
+    return (
+      <View style={styles.loading}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -37,7 +56,7 @@ export default function TodoScreen() {
         placeholder="Nova tarefa"
         style={styles.input}
       />
-      <Button title="Adicionar" onPress={addTask} />
+      <Button title="Adicionar" onPress={addTask} color={colors.primary} />
 
       <FlatList
         data={list}
@@ -55,7 +74,7 @@ export default function TodoScreen() {
             </Pressable>
 
             <Pressable
-              onPress={() => deleteTask(item.id)}
+              onPress={() => deleteTaskItem(item.id)}
               style={styles.deleteButton}
               accessibilityRole="button"
               accessibilityLabel="Excluir tarefa"
@@ -70,6 +89,11 @@ export default function TodoScreen() {
 }
 
 const styles = StyleSheet.create({
+  loading: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   container: {
     marginTop: 50,
     paddingHorizontal: 16,

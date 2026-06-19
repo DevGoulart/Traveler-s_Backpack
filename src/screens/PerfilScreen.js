@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Image, FlatList, Pressable } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Image, FlatList, Pressable, Share, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Avatar from '../components/Avatar';
@@ -8,9 +8,10 @@ import spacing from '../theme/spacing';
 
 export default function PerfilScreen({ navigation }) {
   const insets = useSafeAreaInsets();
-  const { currentUser, userPosts } = useSocial();
+  const { currentUser, userBio, userPosts } = useSocial();
 
   const username = currentUser || 'Viajante';
+  const bio = userBio || 'Explorador 🌍 | Compartilhando aventuras pelo mundo';
   const postCount = userPosts.length;
   const followers = 128;
   const following = 96;
@@ -59,13 +60,27 @@ export default function PerfilScreen({ navigation }) {
         </View>
 
         <Text style={styles.displayName}>{username}</Text>
-        <Text style={styles.bio}>Explorador 🌍 | Compartilhando aventuras pelo mundo</Text>
+        <Text style={styles.bio}>{bio}</Text>
 
         <View style={styles.actionRow}>
-          <Pressable style={styles.editButton}>
+          <Pressable
+            style={styles.editButton}
+            onPress={() => navigation.navigate('EditProfile')}
+          >
             <Text style={styles.editButtonText}>Editar perfil</Text>
           </Pressable>
-          <Pressable style={styles.shareButton}>
+          <Pressable
+            style={styles.shareButton}
+            onPress={async () => {
+              try {
+                await Share.share({
+                  message: `Confira o perfil de ${username} no Traveler's Backpack! 🌍`,
+                });
+              } catch {
+                Alert.alert('Erro', 'Não foi possível compartilhar o perfil.');
+              }
+            }}
+          >
             <Ionicons name="share-outline" size={18} color={colors.text} />
           </Pressable>
         </View>

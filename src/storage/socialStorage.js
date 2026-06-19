@@ -1,144 +1,135 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { initDatabase, getDatabase } from '../database/init';
+import * as postsRepo from '../database/repositories/postsRepository';
+import * as storiesRepo from '../database/repositories/storiesRepository';
+import * as settingsRepo from '../database/repositories/settingsRepository';
+import { DEMO_POSTS, DEMO_STORIES, isStoryExpired, filterActiveStories } from '../database/schema';
 
-export const POSTS_KEY = '@traveler_backpack_posts';
-export const STORIES_KEY = '@traveler_backpack_stories';
-export const USER_KEY = '@traveler_backpack_current_user';
+export { DEMO_POSTS, DEMO_STORIES, isStoryExpired, filterActiveStories };
 
-const STORY_TTL_MS = 24 * 60 * 60 * 1000;
-
-export function isStoryExpired(createdAt) {
-  if (!createdAt) return true;
-  return Date.now() - new Date(createdAt).getTime() > STORY_TTL_MS;
+export async function loadPosts(currentUsername) {
+  await initDatabase();
+  const db = await getDatabase();
+  return postsRepo.getAllPosts(db, currentUsername);
 }
 
-export function filterActiveStories(stories) {
-  if (!Array.isArray(stories)) return [];
-  return stories
-    .map((group) => ({
-      ...group,
-      items: (group.items || []).filter((item) => !isStoryExpired(item.createdAt)),
-    }))
-    .filter((group) => group.items.length > 0);
+export async function createPost(postData) {
+  await initDatabase();
+  const db = await getDatabase();
+  await postsRepo.deleteDemoPosts(db);
+  return postsRepo.createPost(db, postData);
 }
 
-export async function loadPosts() {
-  try {
-    const raw = await AsyncStorage.getItem(POSTS_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+export async function togglePostLike(postId, username) {
+  if (!username) return null;
+  await initDatabase();
+  const db = await getDatabase();
+  return postsRepo.togglePostLike(db, postId, username);
 }
 
-export async function savePosts(posts) {
-  await AsyncStorage.setItem(POSTS_KEY, JSON.stringify(posts));
+export async function addPostComment(postId, username, text) {
+  if (!username || !text.trim()) return null;
+  await initDatabase();
+  const db = await getDatabase();
+  return postsRepo.addComment(db, postId, username, text);
 }
 
-export async function loadStories() {
-  try {
-    const raw = await AsyncStorage.getItem(STORIES_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-    return filterActiveStories(parsed);
-  } catch {
-    return [];
-  }
+export async function loadStories(viewerUsername) {
+  await initDatabase();
+  const db = await getDatabase();
+  await storiesRepo.cleanupExpiredStories(db);
+  return storiesRepo.getAllStories(db, viewerUsername);
 }
 
-export async function saveStories(stories) {
-  const active = filterActiveStories(stories);
-  await AsyncStorage.setItem(STORIES_KEY, JSON.stringify(active));
+export async function createStoryItem(storyData) {
+  await initDatabase();
+  const db = await getDatabase();
+  return storiesRepo.addStoryItem(db, storyData);
+}
+
+export async function markStoryAsViewed(userId, viewerUsername) {
+  if (!viewerUsername) return;
+  await initDatabase();
+  const db = await getDatabase();
+  await storiesRepo.markStoryViewed(db, userId, viewerUsername);
 }
 
 export async function loadCurrentUser() {
-  try {
-    return await AsyncStorage.getItem(USER_KEY);
-  } catch {
-    return null;
-  }
+  await initDatabase();
+  const db = await getDatabase();
+  return settingsRepo.getSetting(db, 'current_user');
 }
 
 export async function saveCurrentUser(username) {
+  await initDatabase();
+  const db = await getDatabase();
   if (username) {
-    await AsyncStorage.setItem(USER_KEY, username);
+    await settingsRepo.setSetting(db, 'current_user', username);
   } else {
-    await AsyncStorage.removeItem(USER_KEY);
+    await settingsRepo.removeSetting(db, 'current_user');
   }
 }
 
-export const DEMO_POSTS = [
-  {
-    id: 'demo-1',
-    userId: 'joao',
-    username: 'João',
-    imageUri: 'https://picsum.photos/seed/maranhenses/800/800',
-    description: 'Curtindo o dia nos Lençóis Maranhenses 😎',
-    location: 'Maranhão, Brasil',
-    createdAt: new Date(Date.now() - 3600000 * 5).toISOString(),
-    likes: 42,
-    liked: false,
-    comments: [{ id: 'c1', username: 'Maria', text: 'Que lugar incrível!', createdAt: new Date().toISOString() }],
-  },
-  {
-    id: 'demo-2',
-    userId: 'maria',
-    username: 'Maria',
-    imageUri: 'https://picsum.photos/seed/rio/800/800',
-    description: 'Olha essa paisagem! 🌅',
-    location: 'Rio de Janeiro, Brasil',
-    createdAt: new Date(Date.now() - 3600000 * 12).toISOString(),
-    likes: 128,
-    liked: false,
-    comments: [],
-  },
-  {
-    id: 'demo-3',
-    userId: 'pedro',
-    username: 'Pedro',
-    imageUri: 'https://picsum.photos/seed/mountain/800/800',
-    description: 'Aventura nas montanhas 🏔️',
-    location: 'Chapada Diamantina',
-    createdAt: new Date(Date.now() - 3600000 * 24).toISOString(),
-    likes: 67,
-    liked: false,
-    comments: [{ id: 'c2', username: 'Ana', text: 'Quero ir também!', createdAt: new Date().toISOString() }],
-  },
-];
+export async function loadUserBio() {
+  await initDatabase();
+  const db = await getDatabase();
+  return settingsRepo.getSetting(db, 'user_bio');
+}
 
-export const DEMO_STORIES = [
-  {
-    userId: 'maria',
-    username: 'Maria',
-    items: [
-      {
-        id: 's-maria-1',
-        uri: 'https://picsum.photos/seed/story-maria/1080/1920',
-        createdAt: new Date(Date.now() - 3600000 * 2).toISOString(),
-      },
-    ],
-    viewed: false,
-  },
-  {
-    userId: 'pedro',
-    username: 'Pedro',
-    items: [
-      {
-        id: 's-pedro-1',
-        uri: 'https://picsum.photos/seed/story-pedro/1080/1920',
-        createdAt: new Date(Date.now() - 3600000 * 4).toISOString(),
-      },
-    ],
-    viewed: false,
-  },
-  {
-    userId: 'ana',
-    username: 'Ana',
-    items: [
-      {
-        id: 's-ana-1',
-        uri: 'https://picsum.photos/seed/story-ana/1080/1920',
-        createdAt: new Date(Date.now() - 3600000 * 8).toISOString(),
-      },
-    ],
-    viewed: false,
-  },
-];
+export async function saveUserBio(bio) {
+  await initDatabase();
+  const db = await getDatabase();
+  if (bio) {
+    await settingsRepo.setSetting(db, 'user_bio', bio);
+  } else {
+    await settingsRepo.removeSetting(db, 'user_bio');
+  }
+}
+
+export async function loadCameraHistory() {
+  await initDatabase();
+  const db = await getDatabase();
+  const { getCameraHistory } = await import('../database/repositories/cameraRepository');
+  return getCameraHistory(db);
+}
+
+export async function saveCameraPhoto(photo) {
+  await initDatabase();
+  const db = await getDatabase();
+  const { insertPhoto } = await import('../database/repositories/cameraRepository');
+  await insertPhoto(db, photo);
+}
+
+export async function clearCameraHistory() {
+  await initDatabase();
+  const db = await getDatabase();
+  const { clearCameraHistory: clear } = await import('../database/repositories/cameraRepository');
+  await clear(db);
+}
+
+export async function loadTodos() {
+  await initDatabase();
+  const db = await getDatabase();
+  const { getAllTodos } = await import('../database/repositories/todosRepository');
+  return getAllTodos(db);
+}
+
+export async function createTodo(text) {
+  await initDatabase();
+  const db = await getDatabase();
+  const { createTodo: create } = await import('../database/repositories/todosRepository');
+  return create(db, text);
+}
+
+export async function toggleTodo(id) {
+  await initDatabase();
+  const db = await getDatabase();
+  const { toggleTodo: toggle } = await import('../database/repositories/todosRepository');
+  await toggle(db, id);
+}
+
+export async function deleteTodo(id) {
+  await initDatabase();
+  const db = await getDatabase();
+  const { deleteTodo: remove } = await import('../database/repositories/todosRepository');
+  await remove(db, id);
+}

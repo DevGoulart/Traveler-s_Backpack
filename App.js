@@ -6,8 +6,10 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { SocialProvider } from './src/context/SocialContext';
 import HomeScreen from './src/screens/HomeScreen';
+import ExploreScreen from './src/screens/ExploreScreen';
 import CameraScreen from './src/screens/CameraScreen';
 import PerfilScreen from './src/screens/PerfilScreen';
+import EditProfileScreen from './src/screens/EditProfileScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import BiometriaScreen from './src/screens/BiometriaScreen';
 import JurosScreen from './src/screens/JurosScreen';
@@ -39,6 +41,8 @@ function Tabs() {
 
           if (route.name === 'HomeTab') {
             iconName = focused ? 'home' : 'home-outline';
+          } else if (route.name === 'ExploreTab') {
+            iconName = focused ? 'compass' : 'compass-outline';
           } else if (route.name === 'CameraTab') {
             iconName = focused ? 'camera' : 'camera-outline';
           } else if (route.name === 'PerfilTab') {
@@ -50,6 +54,7 @@ function Tabs() {
       })}
     >
       <Tab.Screen name="HomeTab" component={HomeScreen} />
+      <Tab.Screen name="ExploreTab" component={ExploreScreen} />
       <Tab.Screen name="CameraTab" component={CameraScreen} />
       <Tab.Screen name="PerfilTab" component={PerfilScreen} />
     </Tab.Navigator>
@@ -64,6 +69,11 @@ export default function App() {
           <Stack.Navigator>
             <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
             <Stack.Screen name="Home" component={Tabs} options={{ headerShown: false }} />
+            <Stack.Screen
+              name="EditProfile"
+              component={EditProfileScreen}
+              options={{ headerShown: false, presentation: 'modal' }}
+            />
             <Stack.Screen
               name="StoryViewer"
               component={StoryViewerScreen}

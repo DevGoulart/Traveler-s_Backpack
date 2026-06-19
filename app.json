@@ -13,17 +13,41 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "O app precisa da câmera para capturar fotos das suas aventuras.",
+        "NSLocationWhenInUseUsageDescription": "O app usa sua localização para marcar onde as fotos foram tiradas."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION"
+      ]
     },
     "web": {
       "favicon": "./assets/icon.png"
-    }
+    },
+    "plugins": [
+      "expo-sqlite",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "O app precisa da câmera para capturar fotos das suas aventuras."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "O app usa sua localização para marcar onde as fotos foram tiradas."
+        }
+      ]
+    ]
   }
 }

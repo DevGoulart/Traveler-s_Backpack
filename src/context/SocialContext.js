@@ -1,40 +1,58 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { initDatabase } from '../database/init';
 import {
-  DEMO_POSTS,
-  DEMO_STORIES,
-  loadCurrentUser,
   loadPosts,
   loadStories,
+  loadCurrentUser,
   saveCurrentUser,
-  savePosts,
-  saveStories,
+  loadUserBio,
+  saveUserBio,
+  createPost,
+  createStoryItem,
+  togglePostLike,
+  addPostComment,
+  markStoryAsViewed,
 } from '../storage/socialStorage';
 
 const SocialContext = createContext(null);
 
 export function SocialProvider({ children }) {
   const [currentUser, setCurrentUserState] = useState(null);
+  const [userBio, setUserBioState] = useState('');
   const [posts, setPosts] = useState([]);
   const [stories, setStories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-
-  const loadAll = useCallback(async () => {
-    const [storedPosts, storedStories, storedUser] = await Promise.all([
-      loadPosts(),
-      loadStories(),
-      loadCurrentUser(),
-    ]);
-
-    setPosts(storedPosts.length > 0 ? storedPosts : DEMO_POSTS);
-    setStories(storedStories.length > 0 ? storedStories : DEMO_STORIES);
-    setCurrentUserState(storedUser);
-    setLoading(false);
-  }, []);
+  const [dbReady, setDbReady] = useState(false);
 
   useEffect(() => {
-    loadAll();
-  }, [loadAll]);
+    initDatabase()
+      .then(() => setDbReady(true))
+      .catch(() => setDbReady(true));
+  }, []);
+
+  const loadAll = useCallback(async () => {
+    if (!dbReady) return;
+
+    const storedUser = await loadCurrentUser();
+    const [storedPosts, storedStories, storedBio] = await Promise.all([
+      loadPosts(storedUser),
+      loadStories(storedUser),
+      loadUserBio(),
+    ]);
+
+    setPosts(storedPosts);
+    setStories(storedStories);
+    setCurrentUserState(storedUser);
+    setUserBioState(storedBio || '');
+    setLoading(false);
+  }, [dbReady]);
+
+  useEffect(() => {
+    if (dbReady) {
+      loadAll();
+    }
+  }, [dbReady, loadAll]);
 
   const refreshFeed = useCallback(async () => {
     setRefreshing(true);
@@ -45,58 +63,33 @@ export function SocialProvider({ children }) {
   const setCurrentUser = useCallback(async (username) => {
     setCurrentUserState(username);
     await saveCurrentUser(username);
-  }, []);
+    await loadAll();
+  }, [loadAll]);
+
+  const updateProfile = useCallback(async (username, bio) => {
+    setCurrentUserState(username);
+    setUserBioState(bio);
+    await Promise.all([saveCurrentUser(username), saveUserBio(bio)]);
+    await loadAll();
+  }, [loadAll]);
 
   const addPost = useCallback(async (postData) => {
-    const newPost = {
-      id: Date.now().toString(),
-      likes: 0,
-      liked: false,
-      comments: [],
-      createdAt: new Date().toISOString(),
-      ...postData,
-    };
-
-    setPosts((prev) => {
-      const updated = [newPost, ...prev.filter((p) => !p.id.startsWith('demo-'))];
-      savePosts(updated);
-      return updated;
-    });
-
+    const newPost = await createPost(postData);
+    await loadAll();
     return newPost;
-  }, []);
+  }, [loadAll]);
 
   const addStory = useCallback(async (storyData) => {
-    const { userId, username, uri } = storyData;
-    const newItem = {
-      id: Date.now().toString(),
-      uri,
-      createdAt: new Date().toISOString(),
-    };
+    await createStoryItem(storyData);
+    await loadAll();
+  }, [loadAll]);
 
-    setStories((prev) => {
-      const withoutDemo = prev.filter((s) => !['maria', 'pedro', 'ana'].includes(s.userId) || s.userId === userId);
-      const existing = withoutDemo.find((s) => s.userId === userId);
+  const toggleLike = useCallback(async (postId) => {
+    if (!currentUser) return;
 
-      let updated;
-      if (existing) {
-        updated = withoutDemo.map((s) =>
-          s.userId === userId
-            ? { ...s, items: [newItem, ...s.items], viewed: false }
-            : s
-        );
-      } else {
-        updated = [{ userId, username, items: [newItem], viewed: false }, ...withoutDemo];
-      }
-
-      saveStories(updated);
-      return updated;
-    });
-  }, []);
-
-  const toggleLike = useCallback((postId) => {
-    setPosts((prev) => {
-      const updated = prev.map((post) => {
+    await togglePostLike(postId, currentUser);
+    setPosts((prev) =>
+      prev.map((post) => {
         if (post.id !== postId) return post;
         const liked = !post.liked;
         return {
@@ -104,46 +97,33 @@ export function SocialProvider({ children }) {
           liked,
           likes: liked ? post.likes + 1 : Math.max(0, post.likes - 1),
         };
-      });
-      savePosts(updated.filter((p) => !p.id.startsWith('demo-')));
-      return updated;
-    });
-  }, []);
-
-  const addComment = useCallback((postId, text) => {
-    if (!text.trim() || !currentUser) return;
-
-    setPosts((prev) => {
-      const updated = prev.map((post) => {
-        if (post.id !== postId) return post;
-        return {
-          ...post,
-          comments: [
-            ...post.comments,
-            {
-              id: Date.now().toString(),
-              username: currentUser,
-              text: text.trim(),
-              createdAt: new Date().toISOString(),
-            },
-          ],
-        };
-      });
-      savePosts(updated.filter((p) => !p.id.startsWith('demo-')));
-      return updated;
-    });
+      })
+    );
   }, [currentUser]);
 
-  const markStoryViewed = useCallback((userId) => {
-    setStories((prev) => {
-      const updated = prev.map((s) =>
-        s.userId === userId ? { ...s, viewed: true } : s
-      );
-      const toPersist = updated.filter((s) => !['maria', 'pedro', 'ana'].includes(s.userId));
-      if (toPersist.length > 0) saveStories(toPersist);
-      return updated;
-    });
-  }, []);
+  const addComment = useCallback(async (postId, text) => {
+    if (!text.trim() || !currentUser) return;
+
+    const comment = await addPostComment(postId, currentUser, text);
+    if (!comment) return;
+
+    setPosts((prev) =>
+      prev.map((post) =>
+        post.id === postId
+          ? { ...post, comments: [...post.comments, comment] }
+          : post
+      )
+    );
+  }, [currentUser]);
+
+  const markStoryViewed = useCallback(async (userId) => {
+    if (!currentUser) return;
+
+    await markStoryAsViewed(userId, currentUser);
+    setStories((prev) =>
+      prev.map((s) => (s.userId === userId ? { ...s, viewed: true } : s))
+    );
+  }, [currentUser]);
 
   const userPosts = useMemo(
     () => posts.filter((p) => p.username === currentUser || p.userId === currentUser?.toLowerCase()),
@@ -154,6 +134,8 @@ export function SocialProvider({ children }) {
     () => ({
       currentUser,
       setCurrentUser,
+      userBio,
+      updateProfile,
       posts,
       stories,
       userPosts,
@@ -169,6 +151,8 @@ export function SocialProvider({ children }) {
     [
       currentUser,
       setCurrentUser,
+      userBio,
+      updateProfile,
       posts,
       stories,
       userPosts,

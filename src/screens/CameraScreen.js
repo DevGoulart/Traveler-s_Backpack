@@ -1,4 +1,3 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Location from 'expo-location';
 import { useEffect, useRef, useState } from 'react';
@@ -7,26 +6,25 @@ import {
   Text,
   StyleSheet,
   Image,
-  FlatList,
   Pressable,
   ScrollView,
   TextInput,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSocial } from '../context/SocialContext';
+import { loadCameraHistory, saveCameraPhoto, clearCameraHistory as clearCameraHistoryDb } from '../storage/socialStorage';
 import colors from '../theme/colors';
 import spacing from '../theme/spacing';
 
-const STORAGE_KEY = '@traveler_backpack_camera_history';
 const MAX_HISTORY_ITEMS = 10;
 
 export default function CameraScreen() {
   const cameraRef = useRef(null);
   const insets = useSafeAreaInsets();
   const [permission, requestPermission] = useCameraPermissions();
-  const [lastPhotoUri, setLastPhotoUri] = useState('');
   const [history, setHistory] = useState([]);
   const [selectedPhoto, setSelectedPhoto] = useState(null);
   const [publishMode, setPublishMode] = useState('post');
@@ -68,7 +66,7 @@ export default function CameraScreen() {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        return 'Localização não autorizada pelo usuário.';
+        return { full: 'Localização não autorizada pelo usuário.', short: null };
       }
 
       const current = await Location.getCurrentPositionAsync({});
@@ -100,13 +98,10 @@ export default function CameraScreen() {
   useEffect(() => {
     const loadHistory = async () => {
       try {
-        const stored = await AsyncStorage.getItem(STORAGE_KEY);
-        if (!stored) return;
-
-        const normalized = normalizeHistory(JSON.parse(stored));
+        const stored = await loadCameraHistory();
+        const normalized = normalizeHistory(stored);
         setHistory(normalized);
         if (normalized.length > 0) {
-          setLastPhotoUri(normalized[0].uri);
           setSelectedPhoto(normalized[0]);
         }
       } catch {
@@ -123,7 +118,10 @@ export default function CameraScreen() {
     try {
       const photo = await cameraRef.current.takePictureAsync({ quality: 0.7 });
       const uri = photo?.uri;
-      if (!uri) return;
+      if (!uri) {
+        Alert.alert('Erro', 'Não foi possível capturar a foto. Tente novamente.');
+        return;
+      }
 
       const location = await buildLocationDescription();
       const newItem = {
@@ -135,14 +133,13 @@ export default function CameraScreen() {
       };
 
       const updatedHistory = [newItem, ...history].slice(0, MAX_HISTORY_ITEMS);
-      setLastPhotoUri(uri);
       setSelectedPhoto(newItem);
       setHistory(updatedHistory);
       setShowPublishPanel(true);
       setCaption('');
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updatedHistory));
+      await saveCameraPhoto(newItem);
     } catch {
-      // Silently ignore capture errors.
+      Alert.alert('Erro', 'Falha ao tirar a foto. Verifique as permissões da câmera.');
     }
   };
 
@@ -172,6 +169,9 @@ export default function CameraScreen() {
 
       setShowPublishPanel(false);
       setCaption('');
+      Alert.alert('Publicado!', publishMode === 'story' ? 'Seu story foi adicionado.' : 'Seu post foi compartilhado.');
+    } catch {
+      Alert.alert('Erro', 'Não foi possível publicar. Tente novamente.');
     } finally {
       setPublishing(false);
     }
@@ -179,13 +179,12 @@ export default function CameraScreen() {
 
   const clearHistory = async () => {
     setHistory([]);
-    setLastPhotoUri('');
     setSelectedPhoto(null);
     setShowPublishPanel(false);
-    await AsyncStorage.removeItem(STORAGE_KEY);
+    await clearCameraHistoryDb();
   };
 
-  if (!permission) return <View />;
+  if (!permission) return <View style={styles.container} />;
 
   if (!permission.granted) {
     return (
@@ -203,8 +202,8 @@ export default function CameraScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <ScrollView contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + spacing.md }]}>
+    <View style={[styles.container, { paddingTop: insets.top + spacing.md }]}>
+      <View style={styles.topSection}>
         <Text style={styles.screenTitle}>Câmera</Text>
 
         <View style={styles.modeSelector}>
@@ -238,7 +237,14 @@ export default function CameraScreen() {
             <View style={styles.captureInner} />
           </Pressable>
         </View>
+      </View>
 
+      <ScrollView
+        style={styles.bottomScroll}
+        contentContainerStyle={styles.bottomContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
         {showPublishPanel && selectedPhoto ? (
           <View style={styles.publishPanel}>
             <Image source={{ uri: selectedPhoto.uri }} style={styles.publishPreview} />
@@ -281,30 +287,33 @@ export default function CameraScreen() {
           )}
         </View>
 
-        <FlatList
-          data={history}
-          keyExtractor={(item) => item.id}
+        <ScrollView
           horizontal
-          scrollEnabled={history.length > 0}
+          showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.historyList}
-          ListEmptyComponent={<Text style={styles.emptyHistory}>Nenhuma foto ainda</Text>}
-          renderItem={({ item }) => (
-            <Pressable
-              onPress={() => {
-                setSelectedPhoto(item);
-                setShowPublishPanel(true);
-              }}
-            >
-              <Image
-                source={{ uri: item.uri }}
-                style={[
-                  styles.previewImage,
-                  selectedPhoto?.id === item.id && styles.previewImageSelected,
-                ]}
-              />
-            </Pressable>
+        >
+          {history.length === 0 ? (
+            <Text style={styles.emptyHistory}>Nenhuma foto ainda</Text>
+          ) : (
+            history.map((item) => (
+              <Pressable
+                key={item.id}
+                onPress={() => {
+                  setSelectedPhoto(item);
+                  setShowPublishPanel(true);
+                }}
+              >
+                <Image
+                  source={{ uri: item.uri }}
+                  style={[
+                    styles.previewImage,
+                    selectedPhoto?.id === item.id && styles.previewImageSelected,
+                  ]}
+                />
+              </Pressable>
+            ))
           )}
-        />
+        </ScrollView>
 
         {selectedPhoto && !showPublishPanel ? (
           <View style={styles.detailCard}>
@@ -334,7 +343,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  scrollContent: {
+  topSection: {
+    paddingHorizontal: spacing.lg,
+  },
+  bottomScroll: {
+    flex: 1,
+  },
+  bottomContent: {
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xxl,
   },
@@ -374,7 +389,7 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   cameraWrapper: {
-    height: 380,
+    height: 340,
     borderRadius: 16,
     overflow: 'hidden',
     backgroundColor: '#000',
