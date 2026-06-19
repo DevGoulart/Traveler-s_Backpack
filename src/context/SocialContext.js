@@ -14,6 +14,14 @@ import {
   registerUser as registerUserDb,
   logoutUser as logoutUserDb,
   restoreBiometricSession,
+  getSessionUser,
+  loadAllUserAvatars,
+  loadAllUsersExcept,
+  loadConversations as loadConversationsDb,
+  loadChatMessages as loadChatMessagesDb,
+  sendChatMessage,
+  sharePostInChat,
+  startConversation as startConversationDb,
 } from '../storage/socialStorage';
 
 const SocialContext = createContext(null);
@@ -23,6 +31,9 @@ export function SocialProvider({ children }) {
   const [currentUserId, setCurrentUserId] = useState(null);
   const [userBio, setUserBioState] = useState('');
   const [profilePhotoUri, setProfilePhotoUri] = useState(null);
+  const [userAvatars, setUserAvatars] = useState({ byUsername: {}, byUserId: {} });
+  const [allUsers, setAllUsers] = useState([]);
+  const [conversations, setConversations] = useState([]);
   const [posts, setPosts] = useState([]);
   const [stories, setStories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -40,6 +51,16 @@ export function SocialProvider({ children }) {
       .catch(() => setAuthReady(true));
   }, []);
 
+  const getAvatarUri = useCallback((username, userId) => {
+    if (userId && userAvatars.byUserId[userId]) {
+      return userAvatars.byUserId[userId];
+    }
+    if (username && userAvatars.byUsername[username]) {
+      return userAvatars.byUsername[username];
+    }
+    return null;
+  }, [userAvatars]);
+
   const loadAll = useCallback(async () => {
     if (!authReady) return;
 
@@ -54,9 +75,12 @@ export function SocialProvider({ children }) {
       return;
     }
 
-    const [storedPosts, storedStories] = await Promise.all([
+    const [storedPosts, storedStories, avatarsData, usersList, convos] = await Promise.all([
       loadPosts(storedUser),
       loadStories(storedUser),
+      loadAllUserAvatars(),
+      loadAllUsersExcept(profile.userId),
+      profile.userId ? loadConversationsDb(profile.userId) : Promise.resolve([]),
     ]);
 
     setPosts(storedPosts);
@@ -65,6 +89,9 @@ export function SocialProvider({ children }) {
     setCurrentUserId(profile.userId);
     setUserBioState(profile.bio || '');
     setProfilePhotoUri(profile.avatarUri || null);
+    setUserAvatars({ byUsername: avatarsData.byUsername, byUserId: avatarsData.byUserId });
+    setAllUsers(usersList);
+    setConversations(convos);
     setIsAuthenticated(true);
     setLoading(false);
   }, [authReady]);
@@ -82,6 +109,39 @@ export function SocialProvider({ children }) {
     await loadAll();
     setRefreshing(false);
   }, [loadAll]);
+
+  const loadConversations = useCallback(async () => {
+    if (!currentUserId) return [];
+    const convos = await loadConversationsDb(currentUserId);
+    setConversations(convos);
+    return convos;
+  }, [currentUserId]);
+
+  const loadChatMessages = useCallback(async (conversationId) => {
+    return loadChatMessagesDb(conversationId);
+  }, []);
+
+  const sendMessage = useCallback(async (conversationId, text) => {
+    if (!currentUserId) return null;
+    const message = await sendChatMessage(conversationId, currentUserId, text);
+    await loadConversations();
+    return message;
+  }, [currentUserId, loadConversations]);
+
+  const startConversation = useCallback(async (otherUserId) => {
+    if (!currentUserId) return null;
+    const conversationId = await startConversationDb(currentUserId, otherUserId);
+    await loadConversations();
+    return conversationId;
+  }, [currentUserId, loadConversations]);
+
+  const sharePostToUser = useCallback(async (recipientUser, post) => {
+    if (!currentUserId) return null;
+    const conversationId = await startConversationDb(currentUserId, recipientUser.id);
+    await sharePostInChat(conversationId, currentUserId, post);
+    await loadConversations();
+    return conversationId;
+  }, [currentUserId, loadConversations]);
 
   const login = useCallback(async (loginName, password) => {
     const user = await loginUserDb({ login: loginName, password });
@@ -122,6 +182,9 @@ export function SocialProvider({ children }) {
     setCurrentUserId(null);
     setUserBioState('');
     setProfilePhotoUri(null);
+    setUserAvatars({ byUsername: {}, byUserId: {} });
+    setAllUsers([]);
+    setConversations([]);
     setPosts([]);
     setStories([]);
     setIsAuthenticated(false);
@@ -221,6 +284,10 @@ export function SocialProvider({ children }) {
       currentUserId,
       userBio,
       profilePhotoUri,
+      userAvatars,
+      allUsers,
+      conversations,
+      getAvatarUri,
       isAuthenticated,
       authReady,
       login,
@@ -234,6 +301,11 @@ export function SocialProvider({ children }) {
       loading,
       refreshing,
       refreshFeed,
+      loadConversations,
+      loadChatMessages,
+      sendMessage,
+      startConversation,
+      sharePostToUser,
       addPost,
       addStory,
       toggleLike,
@@ -245,6 +317,10 @@ export function SocialProvider({ children }) {
       currentUserId,
       userBio,
       profilePhotoUri,
+      userAvatars,
+      allUsers,
+      conversations,
+      getAvatarUri,
       isAuthenticated,
       authReady,
       login,
@@ -258,6 +334,11 @@ export function SocialProvider({ children }) {
       loading,
       refreshing,
       refreshFeed,
+      loadConversations,
+      loadChatMessages,
+      sendMessage,
+      startConversation,
+      sharePostToUser,
       addPost,
       addStory,
       toggleLike,

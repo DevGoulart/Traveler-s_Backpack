@@ -31,7 +31,7 @@ const CATEGORY_KEYWORDS = {
 
 export default function ExploreScreen() {
   const insets = useSafeAreaInsets();
-  const { posts, currentUser, profilePhotoUri } = useSocial();
+  const { posts, getAvatarUri } = useSocial();
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('all');
   const [selectedPost, setSelectedPost] = useState(null);
@@ -165,7 +165,7 @@ export default function ExploreScreen() {
                   <View style={styles.modalUser}>
                     <Avatar
                       name={selectedPost.username}
-                      uri={selectedPost.username === currentUser ? profilePhotoUri : null}
+                      uri={getAvatarUri(selectedPost.username, selectedPost.userId)}
                       size={36}
                     />
                     <Text style={styles.modalUsername}>{selectedPost.username}</Text>

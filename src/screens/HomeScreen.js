@@ -1,8 +1,10 @@
-import { FlatList, RefreshControl, StyleSheet, View, ActivityIndicator } from 'react-native';
+import { useState } from 'react';
+import { FlatList, RefreshControl, StyleSheet, View, ActivityIndicator, Alert } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import FeedHeader from '../components/FeedHeader';
 import StoriesRow from '../components/StoriesRow';
 import PostCard from '../components/PostCard';
+import SharePostModal from '../components/SharePostModal';
 import { useSocial } from '../context/SocialContext';
 import colors from '../theme/colors';
 
@@ -12,13 +14,16 @@ export default function HomeScreen() {
     posts,
     stories,
     currentUser,
-    profilePhotoUri,
     loading,
     refreshing,
     refreshFeed,
     toggleLike,
     addComment,
+    getAvatarUri,
+    sharePostToUser,
   } = useSocial();
+
+  const [sharePost, setSharePost] = useState(null);
 
   const handleStoryPress = (story) => {
     navigation.navigate('StoryViewer', { storyGroup: story, allStories: stories });
@@ -26,6 +31,23 @@ export default function HomeScreen() {
 
   const handleAddStory = () => {
     navigation.navigate('CameraTab');
+  };
+
+  const handleSharePost = (post) => {
+    setSharePost(post);
+  };
+
+  const handleSendDM = async (recipient, post) => {
+    try {
+      const conversationId = await sharePostToUser(recipient, post);
+      setSharePost(null);
+      navigation.navigate('Chat', {
+        conversationId,
+        otherUser: recipient,
+      });
+    } catch {
+      Alert.alert('Erro', 'Não foi possível enviar o post.');
+    }
   };
 
   if (loading) {
@@ -55,7 +77,7 @@ export default function HomeScreen() {
             <StoriesRow
               stories={stories}
               currentUser={currentUser}
-              profilePhotoUri={profilePhotoUri}
+              getAvatarUri={getAvatarUri}
               onStoryPress={handleStoryPress}
               onAddStory={handleAddStory}
             />
@@ -66,11 +88,18 @@ export default function HomeScreen() {
             post={item}
             onLike={toggleLike}
             onComment={addComment}
-            currentUser={currentUser}
-            profilePhotoUri={profilePhotoUri}
+            onShare={handleSharePost}
+            getAvatarUri={getAvatarUri}
           />
         )}
         showsVerticalScrollIndicator={false}
+      />
+
+      <SharePostModal
+        visible={!!sharePost}
+        post={sharePost}
+        onClose={() => setSharePost(null)}
+        onSendDM={handleSendDM}
       />
     </View>
   );

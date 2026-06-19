@@ -73,6 +73,28 @@ CREATE TABLE IF NOT EXISTS todos (
   completed INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS conversations (
+  id TEXT PRIMARY KEY NOT NULL,
+  participant_one_id TEXT NOT NULL,
+  participant_two_id TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(participant_one_id, participant_two_id)
+);
+
+CREATE TABLE IF NOT EXISTS messages (
+  id TEXT PRIMARY KEY NOT NULL,
+  conversation_id TEXT NOT NULL,
+  sender_id TEXT NOT NULL,
+  message_type TEXT NOT NULL DEFAULT 'text',
+  text TEXT,
+  post_id TEXT,
+  post_image_uri TEXT,
+  post_description TEXT,
+  post_username TEXT,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+);
 `;
 
 export const STORY_TTL_MS = 24 * 60 * 60 * 1000;

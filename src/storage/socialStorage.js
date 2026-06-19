@@ -129,6 +129,54 @@ export async function restoreBiometricSession() {
   return authRepo.restoreBiometricSession(db);
 }
 
+export async function loadAllUserAvatars() {
+  await initDatabase();
+  const db = await getDatabase();
+  return authRepo.getAllUsersPublicProfiles(db);
+}
+
+export async function loadAllUsersExcept(userId) {
+  if (!userId) return [];
+  await initDatabase();
+  const db = await getDatabase();
+  return authRepo.getAllUsersExcept(db, userId);
+}
+
+export async function loadConversations(userId) {
+  await initDatabase();
+  const db = await getDatabase();
+  const messagesRepo = await import('../database/repositories/messagesRepository');
+  return messagesRepo.getConversationsForUser(db, userId);
+}
+
+export async function loadChatMessages(conversationId) {
+  await initDatabase();
+  const db = await getDatabase();
+  const messagesRepo = await import('../database/repositories/messagesRepository');
+  return messagesRepo.getMessages(db, conversationId);
+}
+
+export async function sendChatMessage(conversationId, senderId, text) {
+  await initDatabase();
+  const db = await getDatabase();
+  const messagesRepo = await import('../database/repositories/messagesRepository');
+  return messagesRepo.sendTextMessage(db, conversationId, senderId, text);
+}
+
+export async function sharePostInChat(conversationId, senderId, post) {
+  await initDatabase();
+  const db = await getDatabase();
+  const messagesRepo = await import('../database/repositories/messagesRepository');
+  return messagesRepo.sendPostShare(db, conversationId, senderId, post);
+}
+
+export async function startConversation(currentUserId, otherUserId) {
+  await initDatabase();
+  const db = await getDatabase();
+  const messagesRepo = await import('../database/repositories/messagesRepository');
+  return messagesRepo.getOrCreateConversation(db, currentUserId, otherUserId);
+}
+
 export async function loadCameraHistory() {
   await initDatabase();
   const db = await getDatabase();

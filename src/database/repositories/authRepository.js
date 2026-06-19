@@ -140,6 +140,43 @@ export async function enableBiometricForUser(db, userId) {
   await settingsRepo.setSetting(db, 'biometric_user_id', userId);
 }
 
+export async function getAllUsersPublicProfiles(db) {
+  const rows = await db.getAllAsync(
+    'SELECT id, login, display_name, avatar_uri FROM users'
+  );
+
+  const byUsername = {};
+  const byUserId = {};
+
+  for (const row of rows) {
+    if (row.avatar_uri) {
+      byUsername[row.display_name] = row.avatar_uri;
+      byUserId[row.id] = row.avatar_uri;
+    }
+  }
+
+  return { byUsername, byUserId, users: rows.map((row) => ({
+    id: row.id,
+    login: row.login,
+    displayName: row.display_name,
+    avatarUri: row.avatar_uri || null,
+  })) };
+}
+
+export async function getAllUsersExcept(db, userId) {
+  const rows = await db.getAllAsync(
+    'SELECT id, login, display_name, avatar_uri FROM users WHERE id != ? ORDER BY display_name ASC',
+    [userId]
+  );
+
+  return rows.map((row) => ({
+    id: row.id,
+    login: row.login,
+    displayName: row.display_name,
+    avatarUri: row.avatar_uri || null,
+  }));
+}
+
 export async function restoreBiometricSession(db) {
   const userId = await settingsRepo.getSetting(db, 'biometric_user_id');
   if (!userId) {

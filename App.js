@@ -17,6 +17,8 @@ import BiometriaScreen from './src/screens/BiometriaScreen';
 import JurosScreen from './src/screens/JurosScreen';
 import MapScreen from './src/screens/MapScreen';
 import TodoScreen from './src/screens/TodoScreen';
+import DMScreen from './src/screens/DMScreen';
+import ChatScreen from './src/screens/ChatScreen';
 import StoryViewerScreen from './src/screens/StoryViewerScreen';
 import colors from './src/theme/colors';
 
@@ -89,6 +91,8 @@ function RootNavigator() {
             component={StoryViewerScreen}
             options={{ animation: 'fade', presentation: 'fullScreenModal' }}
           />
+          <Stack.Screen name="DM" component={DMScreen} />
+          <Stack.Screen name="Chat" component={ChatScreen} />
           <Stack.Screen name="Biometria" component={BiometriaScreen} />
           <Stack.Screen name="Juros" component={JurosScreen} />
           <Stack.Screen name="Mapa" component={MapScreen} />

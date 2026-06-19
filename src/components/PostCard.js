@@ -23,7 +23,7 @@ function timeAgo(dateString) {
   return `${days}d`;
 }
 
-export default function PostCard({ post, onLike, onComment, currentUser, profilePhotoUri }) {
+export default function PostCard({ post, onLike, onComment, onShare, getAvatarUri }) {
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [liked, setLiked] = useState(post.liked);
@@ -47,8 +47,7 @@ export default function PostCard({ post, onLike, onComment, currentUser, profile
       ? { uri: post.uri }
       : null;
 
-  const isOwnPost = post.username === currentUser;
-  const authorAvatarUri = isOwnPost ? profilePhotoUri : null;
+  const authorAvatarUri = getAvatarUri(post.username, post.userId);
 
   return (
     <View style={styles.card}>
@@ -83,7 +82,7 @@ export default function PostCard({ post, onLike, onComment, currentUser, profile
           <Pressable onPress={() => setShowComments(true)} hitSlop={8} style={styles.actionIcon}>
             <Ionicons name="chatbubble-outline" size={24} color={colors.text} />
           </Pressable>
-          <Pressable hitSlop={8}>
+          <Pressable onPress={() => onShare?.(post)} hitSlop={8} style={styles.actionIcon}>
             <Ionicons name="paper-plane-outline" size={24} color={colors.text} />
           </Pressable>
         </View>
@@ -130,7 +129,7 @@ export default function PostCard({ post, onLike, onComment, currentUser, profile
                 <View style={styles.commentRow}>
                   <Avatar
                     name={item.username}
-                    uri={item.username === currentUser ? profilePhotoUri : null}
+                    uri={getAvatarUri(item.username)}
                     size={32}
                   />
                   <View style={styles.commentBody}>
