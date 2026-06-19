@@ -12,6 +12,7 @@ export default function HomeScreen() {
     posts,
     stories,
     currentUser,
+    profilePhotoUri,
     loading,
     refreshing,
     refreshFeed,
@@ -54,13 +55,20 @@ export default function HomeScreen() {
             <StoriesRow
               stories={stories}
               currentUser={currentUser}
+              profilePhotoUri={profilePhotoUri}
               onStoryPress={handleStoryPress}
               onAddStory={handleAddStory}
             />
           </>
         }
         renderItem={({ item }) => (
-          <PostCard post={item} onLike={toggleLike} onComment={addComment} />
+          <PostCard
+            post={item}
+            onLike={toggleLike}
+            onComment={addComment}
+            currentUser={currentUser}
+            profilePhotoUri={profilePhotoUri}
+          />
         )}
         showsVerticalScrollIndicator={false}
       />

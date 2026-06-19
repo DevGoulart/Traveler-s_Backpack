@@ -3,15 +3,14 @@ import { initDatabase } from '../database/init';
 import {
   loadPosts,
   loadStories,
-  loadCurrentUser,
+  loadProfile,
   saveCurrentUser,
-  loadUserBio,
-  saveUserBio,
   createPost,
   createStoryItem,
   togglePostLike,
   addPostComment,
   markStoryAsViewed,
+  updateUserProfile,
 } from '../storage/socialStorage';
 
 const SocialContext = createContext(null);
@@ -19,6 +18,7 @@ const SocialContext = createContext(null);
 export function SocialProvider({ children }) {
   const [currentUser, setCurrentUserState] = useState(null);
   const [userBio, setUserBioState] = useState('');
+  const [profilePhotoUri, setProfilePhotoUri] = useState(null);
   const [posts, setPosts] = useState([]);
   const [stories, setStories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -34,17 +34,19 @@ export function SocialProvider({ children }) {
   const loadAll = useCallback(async () => {
     if (!dbReady) return;
 
-    const storedUser = await loadCurrentUser();
-    const [storedPosts, storedStories, storedBio] = await Promise.all([
+    const profile = await loadProfile();
+    const storedUser = profile.username;
+
+    const [storedPosts, storedStories] = await Promise.all([
       loadPosts(storedUser),
       loadStories(storedUser),
-      loadUserBio(),
     ]);
 
     setPosts(storedPosts);
     setStories(storedStories);
     setCurrentUserState(storedUser);
-    setUserBioState(storedBio || '');
+    setUserBioState(profile.bio || '');
+    setProfilePhotoUri(profile.avatarUri || null);
     setLoading(false);
   }, [dbReady]);
 
@@ -66,12 +68,23 @@ export function SocialProvider({ children }) {
     await loadAll();
   }, [loadAll]);
 
-  const updateProfile = useCallback(async (username, bio) => {
-    setCurrentUserState(username);
-    setUserBioState(bio);
-    await Promise.all([saveCurrentUser(username), saveUserBio(bio)]);
+  const updateProfile = useCallback(async (username, bio, avatarUri) => {
+    const trimmedName = username.trim();
+    const trimmedBio = bio.trim();
+
+    await updateUserProfile({
+      oldUsername: currentUser,
+      newUsername: trimmedName,
+      bio: trimmedBio,
+      avatarUri,
+    });
+
+    setCurrentUserState(trimmedName);
+    setUserBioState(trimmedBio);
+    setProfilePhotoUri(avatarUri || null);
+
     await loadAll();
-  }, [loadAll]);
+  }, [currentUser, loadAll]);
 
   const addPost = useCallback(async (postData) => {
     const newPost = await createPost(postData);
@@ -135,6 +148,7 @@ export function SocialProvider({ children }) {
       currentUser,
       setCurrentUser,
       userBio,
+      profilePhotoUri,
       updateProfile,
       posts,
       stories,
@@ -152,6 +166,7 @@ export function SocialProvider({ children }) {
       currentUser,
       setCurrentUser,
       userBio,
+      profilePhotoUri,
       updateProfile,
       posts,
       stories,

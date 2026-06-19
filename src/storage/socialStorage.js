@@ -2,6 +2,7 @@ import { initDatabase, getDatabase } from '../database/init';
 import * as postsRepo from '../database/repositories/postsRepository';
 import * as storiesRepo from '../database/repositories/storiesRepository';
 import * as settingsRepo from '../database/repositories/settingsRepository';
+import * as profileRepo from '../database/repositories/profileRepository';
 import { DEMO_POSTS, DEMO_STORIES, isStoryExpired, filterActiveStories } from '../database/schema';
 
 export { DEMO_POSTS, DEMO_STORIES, isStoryExpired, filterActiveStories };
@@ -75,6 +76,12 @@ export async function loadUserBio() {
   return settingsRepo.getSetting(db, 'user_bio');
 }
 
+export async function loadProfile() {
+  await initDatabase();
+  const db = await getDatabase();
+  return profileRepo.getProfile(db);
+}
+
 export async function saveUserBio(bio) {
   await initDatabase();
   const db = await getDatabase();
@@ -83,6 +90,12 @@ export async function saveUserBio(bio) {
   } else {
     await settingsRepo.removeSetting(db, 'user_bio');
   }
+}
+
+export async function updateUserProfile({ oldUsername, newUsername, bio, avatarUri }) {
+  await initDatabase();
+  const db = await getDatabase();
+  await profileRepo.updateUserProfile(db, { oldUsername, newUsername, bio, avatarUri });
 }
 
 export async function loadCameraHistory() {

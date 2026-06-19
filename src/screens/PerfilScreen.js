@@ -8,7 +8,7 @@ import spacing from '../theme/spacing';
 
 export default function PerfilScreen({ navigation }) {
   const insets = useSafeAreaInsets();
-  const { currentUser, userBio, userPosts } = useSocial();
+  const { currentUser, userBio, profilePhotoUri, userPosts } = useSocial();
 
   const username = currentUser || 'Viajante';
   const bio = userBio || 'Explorador 🌍 | Compartilhando aventuras pelo mundo';
@@ -42,7 +42,7 @@ export default function PerfilScreen({ navigation }) {
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       <View style={[styles.header, { paddingTop: insets.top + spacing.lg }]}>
         <View style={styles.profileRow}>
-          <Avatar name={username} size={86} showRing />
+          <Avatar name={username} uri={profilePhotoUri} size={86} showRing />
           <View style={styles.stats}>
             <View style={styles.statItem}>
               <Text style={styles.statNumber}>{postCount}</Text>

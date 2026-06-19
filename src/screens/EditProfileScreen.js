@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import Avatar from '../components/Avatar';
 import { useSocial } from '../context/SocialContext';
 import colors from '../theme/colors';
@@ -19,10 +20,57 @@ import spacing from '../theme/spacing';
 
 export default function EditProfileScreen({ navigation }) {
   const insets = useSafeAreaInsets();
-  const { currentUser, userBio, updateProfile } = useSocial();
+  const { currentUser, userBio, profilePhotoUri, updateProfile } = useSocial();
   const [username, setUsername] = useState(currentUser || '');
   const [bio, setBio] = useState(userBio || '');
+  const [avatarUri, setAvatarUri] = useState(profilePhotoUri);
   const [saving, setSaving] = useState(false);
+
+  const pickImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permissão necessária', 'Permita o acesso à galeria para escolher uma foto.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets[0]?.uri) {
+      setAvatarUri(result.assets[0].uri);
+    }
+  };
+
+  const takePhoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permissão necessária', 'Permita o acesso à câmera para tirar uma foto.');
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets[0]?.uri) {
+      setAvatarUri(result.assets[0].uri);
+    }
+  };
+
+  const handleChangePhoto = () => {
+    Alert.alert('Foto de perfil', 'Como deseja adicionar sua foto?', [
+      { text: 'Galeria', onPress: pickImage },
+      { text: 'Câmera', onPress: takePhoto },
+      avatarUri ? { text: 'Remover foto', style: 'destructive', onPress: () => setAvatarUri(null) } : null,
+      { text: 'Cancelar', style: 'cancel' },
+    ].filter(Boolean));
+  };
 
   const handleSave = async () => {
     const trimmedName = username.trim();
@@ -33,7 +81,7 @@ export default function EditProfileScreen({ navigation }) {
 
     setSaving(true);
     try {
-      await updateProfile(trimmedName, bio.trim());
+      await updateProfile(trimmedName, bio.trim(), avatarUri);
       navigation.goBack();
     } catch {
       Alert.alert('Erro', 'Não foi possível salvar o perfil. Tente novamente.');
@@ -60,10 +108,15 @@ export default function EditProfileScreen({ navigation }) {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <View style={styles.avatarSection}>
-          <Avatar name={username || 'Viajante'} size={96} showRing />
-          <Text style={styles.avatarHint}>Foto de perfil em breve</Text>
-        </View>
+        <Pressable style={styles.avatarSection} onPress={handleChangePhoto}>
+          <View style={styles.avatarWrapper}>
+            <Avatar name={username || 'Viajante'} uri={avatarUri} size={96} showRing />
+            <View style={styles.cameraBadge}>
+              <Ionicons name="camera" size={16} color="#fff" />
+            </View>
+          </View>
+          <Text style={styles.avatarHint}>Toque para alterar a foto</Text>
+        </Pressable>
 
         <View style={styles.field}>
           <Text style={styles.label}>Nome</Text>
@@ -133,9 +186,26 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingVertical: spacing.lg,
   },
+  avatarWrapper: {
+    position: 'relative',
+  },
+  cameraBadge: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: colors.surface,
+  },
   avatarHint: {
     fontSize: 13,
-    color: colors.textSecondary,
+    color: colors.primary,
+    fontWeight: '600',
   },
   field: {
     gap: spacing.xs,

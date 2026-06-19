@@ -20,7 +20,7 @@ const STORY_DURATION = 5000;
 
 export default function StoryViewerScreen({ route, navigation }) {
   const { storyGroup, allStories } = route.params;
-  const { markStoryViewed } = useSocial();
+  const { markStoryViewed, currentUser, profilePhotoUri } = useSocial();
   const insets = useSafeAreaInsets();
 
   const [groupIndex, setGroupIndex] = useState(
@@ -110,7 +110,11 @@ export default function StoryViewerScreen({ route, navigation }) {
         </View>
 
         <View style={styles.header}>
-          <Avatar name={currentGroup.username} size={36} />
+          <Avatar
+            name={currentGroup.username}
+            uri={currentGroup.username === currentUser ? profilePhotoUri : null}
+            size={36}
+          />
           <Text style={styles.username}>{currentGroup.username}</Text>
           <Text style={styles.time}>
             {new Date(currentItem.createdAt).toLocaleTimeString([], {

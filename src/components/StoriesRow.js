@@ -4,7 +4,7 @@ import Avatar from './Avatar';
 import colors from '../theme/colors';
 import spacing from '../theme/spacing';
 
-export default function StoriesRow({ stories, currentUser, onStoryPress, onAddStory }) {
+export default function StoriesRow({ stories, currentUser, profilePhotoUri, onStoryPress, onAddStory }) {
   return (
     <View style={styles.container}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scroll}>
@@ -27,6 +27,7 @@ export default function StoriesRow({ stories, currentUser, onStoryPress, onAddSt
           >
             <Avatar
               name={story.username}
+              uri={story.username === currentUser ? profilePhotoUri : null}
               size={62}
               showRing
               viewed={story.viewed}

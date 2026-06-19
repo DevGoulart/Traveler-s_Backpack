@@ -23,7 +23,7 @@ function timeAgo(dateString) {
   return `${days}d`;
 }
 
-export default function PostCard({ post, onLike, onComment }) {
+export default function PostCard({ post, onLike, onComment, currentUser, profilePhotoUri }) {
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [liked, setLiked] = useState(post.liked);
@@ -47,10 +47,13 @@ export default function PostCard({ post, onLike, onComment }) {
       ? { uri: post.uri }
       : null;
 
+  const isOwnPost = post.username === currentUser;
+  const authorAvatarUri = isOwnPost ? profilePhotoUri : null;
+
   return (
     <View style={styles.card}>
       <View style={styles.header}>
-        <Avatar name={post.username} size={36} />
+        <Avatar name={post.username} uri={authorAvatarUri} size={36} />
         <View style={styles.headerText}>
           <Text style={styles.username}>{post.username}</Text>
           {post.location ? (
@@ -125,7 +128,11 @@ export default function PostCard({ post, onLike, onComment }) {
               }
               renderItem={({ item }) => (
                 <View style={styles.commentRow}>
-                  <Avatar name={item.username} size={32} />
+                  <Avatar
+                    name={item.username}
+                    uri={item.username === currentUser ? profilePhotoUri : null}
+                    size={32}
+                  />
                   <View style={styles.commentBody}>
                     <Text style={styles.commentText}>
                       <Text style={styles.captionUser}>{item.username} </Text>
