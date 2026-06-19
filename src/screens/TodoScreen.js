@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { View, TextInput, Button, FlatList, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { loadTodos, createTodo, toggleTodo, deleteTodo } from '../storage/socialStorage';
-import colors from '../theme/colors';
+import { useTheme } from '../context/ThemeContext';
 
 export default function TodoScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [task, setTask] = useState('');
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -88,7 +90,8 @@ export default function TodoScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors) {
+  return StyleSheet.create({
   loading: {
     flex: 1,
     alignItems: 'center',
@@ -158,4 +161,5 @@ const styles = StyleSheet.create({
     padding: 6,
     borderRadius: 8,
   },
-});
+  });
+}

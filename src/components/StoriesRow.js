@@ -1,10 +1,14 @@
+import { useMemo } from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Avatar from './Avatar';
-import colors from '../theme/colors';
+import { useTheme } from '../context/ThemeContext';
 import spacing from '../theme/spacing';
 
 export default function StoriesRow({ stories, currentUser, onStoryPress, onAddStory, getAvatarUri }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   return (
     <View style={styles.container}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scroll}>
@@ -42,7 +46,8 @@ export default function StoriesRow({ stories, currentUser, onStoryPress, onAddSt
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors) {
+  return StyleSheet.create({
   container: {
     backgroundColor: colors.surface,
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -81,4 +86,5 @@ const styles = StyleSheet.create({
     color: colors.text,
     textAlign: 'center',
   },
-});
+  });
+}

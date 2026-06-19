@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { FlatList, RefreshControl, StyleSheet, View, ActivityIndicator, Alert } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import FeedHeader from '../components/FeedHeader';
@@ -6,10 +6,12 @@ import StoriesRow from '../components/StoriesRow';
 import PostCard from '../components/PostCard';
 import SharePostModal from '../components/SharePostModal';
 import { useSocial } from '../context/SocialContext';
-import colors from '../theme/colors';
+import { useTheme } from '../context/ThemeContext';
 
 export default function HomeScreen() {
   const navigation = useNavigation();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const {
     posts,
     stories,
@@ -18,6 +20,7 @@ export default function HomeScreen() {
     refreshing,
     refreshFeed,
     toggleLike,
+    toggleSave,
     addComment,
     getAvatarUri,
     sharePostToUser,
@@ -87,6 +90,7 @@ export default function HomeScreen() {
           <PostCard
             post={item}
             onLike={toggleLike}
+            onSave={toggleSave}
             onComment={addComment}
             onShare={handleSharePost}
             getAvatarUri={getAvatarUri}
@@ -105,15 +109,17 @@ export default function HomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  loading: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.background,
-  },
-});
+function createStyles(colors) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    loading: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.background,
+    },
+  });
+}

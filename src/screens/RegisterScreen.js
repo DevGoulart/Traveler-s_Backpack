@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -16,7 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useSocial } from '../context/SocialContext';
-import colors from '../theme/colors';
+import { useTheme } from '../context/ThemeContext';
 import spacing from '../theme/spacing';
 
 function getRegisterErrorMessage(error) {
@@ -34,6 +34,8 @@ function getRegisterErrorMessage(error) {
 
 export default function RegisterScreen({ navigation }) {
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { register } = useSocial();
   const [login, setLogin] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -201,7 +203,8 @@ export default function RegisterScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors) {
+  return StyleSheet.create({
   flex: {
     flex: 1,
     backgroundColor: colors.background,
@@ -315,4 +318,5 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 14,
   },
-});
+  });
+}

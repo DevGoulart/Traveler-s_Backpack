@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -17,7 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { useSocial } from '../context/SocialContext';
-import colors from '../theme/colors';
+import { useTheme } from '../context/ThemeContext';
 import spacing from '../theme/spacing';
 
 function getAuthErrorMessage(error) {
@@ -31,6 +31,8 @@ function getAuthErrorMessage(error) {
 
 export default function LoginScreen({ navigation }) {
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { login, restoreBiometric } = useSocial();
   const [user, setUser] = useState('');
   const [password, setPassword] = useState('');
@@ -178,7 +180,8 @@ export default function LoginScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors) {
+  return StyleSheet.create({
   flex: {
     flex: 1,
     backgroundColor: colors.background,
@@ -298,4 +301,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: spacing.lg,
   },
-});
+  });
+}

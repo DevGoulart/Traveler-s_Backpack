@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Avatar from '../components/Avatar';
 import { useSocial } from '../context/SocialContext';
-import colors from '../theme/colors';
+import { useTheme } from '../context/ThemeContext';
 import spacing from '../theme/spacing';
 
 const { width, height } = Dimensions.get('window');
@@ -21,6 +21,8 @@ const STORY_DURATION = 5000;
 export default function StoryViewerScreen({ route, navigation }) {
   const { storyGroup, allStories } = route.params;
   const { markStoryViewed, getAvatarUri } = useSocial();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const insets = useSafeAreaInsets();
 
   const [groupIndex, setGroupIndex] = useState(
@@ -153,7 +155,8 @@ export default function StoryViewerScreen({ route, navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000',
@@ -240,4 +243,5 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.7)',
     fontSize: 14,
   },
-});
+  });
+}

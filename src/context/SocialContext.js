@@ -8,6 +8,8 @@ import {
   createStoryItem,
   togglePostLike,
   addPostComment,
+  togglePostSave,
+  loadSavedPosts,
   markStoryAsViewed,
   updateUserProfile,
   loginUser as loginUserDb,
@@ -22,6 +24,9 @@ import {
   sendChatMessage,
   sharePostInChat,
   startConversation as startConversationDb,
+  loadActivities as loadActivitiesDb,
+  loadUnreadActivityCount as loadUnreadActivityCountDb,
+  markActivitiesAsRead as markActivitiesAsReadDb,
 } from '../storage/socialStorage';
 
 const SocialContext = createContext(null);
@@ -34,6 +39,9 @@ export function SocialProvider({ children }) {
   const [userAvatars, setUserAvatars] = useState({ byUsername: {}, byUserId: {} });
   const [allUsers, setAllUsers] = useState([]);
   const [conversations, setConversations] = useState([]);
+  const [savedPosts, setSavedPosts] = useState([]);
+  const [activities, setActivities] = useState([]);
+  const [unreadActivityCount, setUnreadActivityCount] = useState(0);
   const [posts, setPosts] = useState([]);
   const [stories, setStories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -75,12 +83,15 @@ export function SocialProvider({ children }) {
       return;
     }
 
-    const [storedPosts, storedStories, avatarsData, usersList, convos] = await Promise.all([
+    const [storedPosts, storedStories, avatarsData, usersList, convos, saved, acts, unreadCount] = await Promise.all([
       loadPosts(storedUser),
       loadStories(storedUser),
       loadAllUserAvatars(),
       loadAllUsersExcept(profile.userId),
       profile.userId ? loadConversationsDb(profile.userId) : Promise.resolve([]),
+      loadSavedPosts(storedUser),
+      profile.userId ? loadActivitiesDb(profile.userId) : Promise.resolve([]),
+      profile.userId ? loadUnreadActivityCountDb(profile.userId) : Promise.resolve(0),
     ]);
 
     setPosts(storedPosts);
@@ -92,6 +103,9 @@ export function SocialProvider({ children }) {
     setUserAvatars({ byUsername: avatarsData.byUsername, byUserId: avatarsData.byUserId });
     setAllUsers(usersList);
     setConversations(convos);
+    setSavedPosts(saved);
+    setActivities(acts);
+    setUnreadActivityCount(unreadCount);
     setIsAuthenticated(true);
     setLoading(false);
   }, [authReady]);
@@ -185,6 +199,9 @@ export function SocialProvider({ children }) {
     setUserAvatars({ byUsername: {}, byUserId: {} });
     setAllUsers([]);
     setConversations([]);
+    setSavedPosts([]);
+    setActivities([]);
+    setUnreadActivityCount(0);
     setPosts([]);
     setStories([]);
     setIsAuthenticated(false);
@@ -243,7 +260,14 @@ export function SocialProvider({ children }) {
         };
       })
     );
-  }, [currentUser]);
+
+    if (currentUserId) {
+      const unreadCount = await loadUnreadActivityCountDb(currentUserId);
+      setUnreadActivityCount(unreadCount);
+      const acts = await loadActivitiesDb(currentUserId);
+      setActivities(acts);
+    }
+  }, [currentUser, currentUserId]);
 
   const addComment = useCallback(async (postId, text) => {
     if (!text.trim() || !currentUser) return;
@@ -258,7 +282,48 @@ export function SocialProvider({ children }) {
           : post
       )
     );
+
+    if (currentUserId) {
+      const [acts, unreadCount] = await Promise.all([
+        loadActivitiesDb(currentUserId),
+        loadUnreadActivityCountDb(currentUserId),
+      ]);
+      setActivities(acts);
+      setUnreadActivityCount(unreadCount);
+    }
+  }, [currentUser, currentUserId]);
+
+  const toggleSave = useCallback(async (postId) => {
+    if (!currentUser) return;
+
+    const saved = await togglePostSave(postId, currentUser);
+    setPosts((prev) =>
+      prev.map((post) =>
+        post.id === postId ? { ...post, saved } : post
+      )
+    );
+
+    const updatedSaved = await loadSavedPosts(currentUser);
+    setSavedPosts(updatedSaved);
   }, [currentUser]);
+
+  const loadActivities = useCallback(async () => {
+    if (!currentUserId) return [];
+    const [acts, unreadCount] = await Promise.all([
+      loadActivitiesDb(currentUserId),
+      loadUnreadActivityCountDb(currentUserId),
+    ]);
+    setActivities(acts);
+    setUnreadActivityCount(unreadCount);
+    return acts;
+  }, [currentUserId]);
+
+  const markActivitiesRead = useCallback(async () => {
+    if (!currentUserId) return;
+    await markActivitiesAsReadDb(currentUserId);
+    setUnreadActivityCount(0);
+    setActivities((prev) => prev.map((a) => ({ ...a, isRead: true })));
+  }, [currentUserId]);
 
   const markStoryViewed = useCallback(async (userId) => {
     if (!currentUser) return;
@@ -287,6 +352,9 @@ export function SocialProvider({ children }) {
       userAvatars,
       allUsers,
       conversations,
+      savedPosts,
+      activities,
+      unreadActivityCount,
       getAvatarUri,
       isAuthenticated,
       authReady,
@@ -309,7 +377,10 @@ export function SocialProvider({ children }) {
       addPost,
       addStory,
       toggleLike,
+      toggleSave,
       addComment,
+      loadActivities,
+      markActivitiesRead,
       markStoryViewed,
     }),
     [
@@ -320,6 +391,9 @@ export function SocialProvider({ children }) {
       userAvatars,
       allUsers,
       conversations,
+      savedPosts,
+      activities,
+      unreadActivityCount,
       getAvatarUri,
       isAuthenticated,
       authReady,
@@ -342,7 +416,10 @@ export function SocialProvider({ children }) {
       addPost,
       addStory,
       toggleLike,
+      toggleSave,
       addComment,
+      loadActivities,
+      markActivitiesRead,
       markStoryViewed,
     ]
   );

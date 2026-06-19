@@ -13,7 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSocial } from '../context/SocialContext';
 import Avatar from '../components/Avatar';
-import colors from '../theme/colors';
+import { useTheme } from '../context/ThemeContext';
 import spacing from '../theme/spacing';
 
 const CATEGORIES = [
@@ -31,6 +31,8 @@ const CATEGORY_KEYWORDS = {
 
 export default function ExploreScreen() {
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const { posts, getAvatarUri } = useSocial();
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('all');
@@ -192,7 +194,8 @@ export default function ExploreScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -346,4 +349,5 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: spacing.xs,
   },
-});
+  });
+}

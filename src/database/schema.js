@@ -95,6 +95,27 @@ CREATE TABLE IF NOT EXISTS messages (
   created_at TEXT NOT NULL,
   FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS saved_posts (
+  post_id TEXT NOT NULL,
+  username TEXT NOT NULL,
+  saved_at TEXT NOT NULL,
+  PRIMARY KEY (post_id, username),
+  FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS activities (
+  id TEXT PRIMARY KEY NOT NULL,
+  user_id TEXT NOT NULL,
+  actor_username TEXT NOT NULL,
+  actor_user_id TEXT,
+  activity_type TEXT NOT NULL,
+  post_id TEXT,
+  post_image_uri TEXT,
+  text TEXT,
+  is_read INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL
+);
 `;
 
 export const STORY_TTL_MS = 24 * 60 * 60 * 1000;

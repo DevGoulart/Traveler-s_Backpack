@@ -1,6 +1,6 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Location from 'expo-location';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSocial } from '../context/SocialContext';
 import { loadCameraHistory, saveCameraPhoto, clearCameraHistory as clearCameraHistoryDb } from '../storage/socialStorage';
-import colors from '../theme/colors';
+import { useTheme } from '../context/ThemeContext';
 import spacing from '../theme/spacing';
 
 const MAX_HISTORY_ITEMS = 10;
@@ -24,6 +24,8 @@ const MAX_HISTORY_ITEMS = 10;
 export default function CameraScreen() {
   const cameraRef = useRef(null);
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [permission, requestPermission] = useCameraPermissions();
   const [history, setHistory] = useState([]);
   const [selectedPhoto, setSelectedPhoto] = useState(null);
@@ -338,7 +340,8 @@ export default function CameraScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors) {
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -578,4 +581,5 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 16,
   },
-});
+  });
+}

@@ -25,14 +25,60 @@ export async function togglePostLike(postId, username) {
   if (!username) return null;
   await initDatabase();
   const db = await getDatabase();
-  return postsRepo.togglePostLike(db, postId, username);
+  const liked = await postsRepo.togglePostLike(db, postId, username);
+
+  if (liked) {
+    const post = await postsRepo.getPostOwner(db, postId);
+    if (post && post.username !== username) {
+      const activitiesRepo = await import('../database/repositories/activitiesRepository');
+      await activitiesRepo.createActivity(db, {
+        userId: post.userId,
+        actorUsername: username,
+        type: 'like',
+        postId,
+        postImageUri: post.imageUri,
+      });
+    }
+  }
+
+  return liked;
+}
+
+export async function togglePostSave(postId, username) {
+  if (!username) return null;
+  await initDatabase();
+  const db = await getDatabase();
+  return postsRepo.togglePostSave(db, postId, username);
+}
+
+export async function loadSavedPosts(username) {
+  await initDatabase();
+  const db = await getDatabase();
+  return postsRepo.getSavedPosts(db, username);
 }
 
 export async function addPostComment(postId, username, text) {
   if (!username || !text.trim()) return null;
   await initDatabase();
   const db = await getDatabase();
-  return postsRepo.addComment(db, postId, username, text);
+  const comment = await postsRepo.addComment(db, postId, username, text);
+
+  if (comment) {
+    const post = await postsRepo.getPostOwner(db, postId);
+    if (post && post.username !== username) {
+      const activitiesRepo = await import('../database/repositories/activitiesRepository');
+      await activitiesRepo.createActivity(db, {
+        userId: post.userId,
+        actorUsername: username,
+        type: 'comment',
+        postId,
+        postImageUri: post.imageUri,
+        text: text.trim(),
+      });
+    }
+  }
+
+  return comment;
 }
 
 export async function loadStories(viewerUsername) {
@@ -224,4 +270,28 @@ export async function deleteTodo(id) {
   const db = await getDatabase();
   const { deleteTodo: remove } = await import('../database/repositories/todosRepository');
   await remove(db, id);
+}
+
+export async function loadActivities(userId) {
+  if (!userId) return [];
+  await initDatabase();
+  const db = await getDatabase();
+  const activitiesRepo = await import('../database/repositories/activitiesRepository');
+  return activitiesRepo.getActivitiesForUser(db, userId);
+}
+
+export async function loadUnreadActivityCount(userId) {
+  if (!userId) return 0;
+  await initDatabase();
+  const db = await getDatabase();
+  const activitiesRepo = await import('../database/repositories/activitiesRepository');
+  return activitiesRepo.getUnreadCount(db, userId);
+}
+
+export async function markActivitiesAsRead(userId) {
+  if (!userId) return;
+  await initDatabase();
+  const db = await getDatabase();
+  const activitiesRepo = await import('../database/repositories/activitiesRepository');
+  await activitiesRepo.markAllAsRead(db, userId);
 }

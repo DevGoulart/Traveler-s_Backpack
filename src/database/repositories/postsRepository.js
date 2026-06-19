@@ -16,12 +16,19 @@ export async function getAllPosts(db, currentUsername) {
     );
 
     let liked = false;
+    let saved = false;
     if (currentUsername) {
       const likeRow = await db.getFirstAsync(
         'SELECT 1 FROM post_likes WHERE post_id = ? AND username = ?',
         [row.id, currentUsername]
       );
       liked = !!likeRow;
+
+      const saveRow = await db.getFirstAsync(
+        'SELECT 1 FROM saved_posts WHERE post_id = ? AND username = ?',
+        [row.id, currentUsername]
+      );
+      saved = !!saveRow;
     }
 
     posts.push({
@@ -34,6 +41,7 @@ export async function getAllPosts(db, currentUsername) {
       location: row.location,
       likes: row.likes_count,
       liked,
+      saved,
       createdAt: row.created_at,
       isDemo: row.is_demo === 1,
       comments,
@@ -92,7 +100,77 @@ export async function createPost(db, postData) {
   };
 
   await insertPost(db, post);
-  return { ...post, liked: false, uri: post.imageUri };
+  return { ...post, liked: false, saved: false, uri: post.imageUri };
+}
+
+export async function togglePostSave(db, postId, username) {
+  const existing = await db.getFirstAsync(
+    'SELECT 1 FROM saved_posts WHERE post_id = ? AND username = ?',
+    [postId, username]
+  );
+
+  if (existing) {
+    await db.runAsync(
+      'DELETE FROM saved_posts WHERE post_id = ? AND username = ?',
+      [postId, username]
+    );
+    return false;
+  }
+
+  await db.runAsync(
+    'INSERT INTO saved_posts (post_id, username, saved_at) VALUES (?, ?, ?)',
+    [postId, username, new Date().toISOString()]
+  );
+  return true;
+}
+
+export async function getSavedPosts(db, currentUsername) {
+  if (!currentUsername) return [];
+
+  const rows = await db.getAllAsync(
+    `SELECT p.* FROM posts p
+     INNER JOIN saved_posts sp ON sp.post_id = p.id AND sp.username = ?
+     ORDER BY datetime(sp.saved_at) DESC`,
+    [currentUsername]
+  );
+
+  const posts = [];
+  for (const row of rows) {
+    const comments = await db.getAllAsync(
+      'SELECT id, username, text, created_at as createdAt FROM comments WHERE post_id = ? ORDER BY datetime(created_at) ASC',
+      [row.id]
+    );
+
+    const likeRow = await db.getFirstAsync(
+      'SELECT 1 FROM post_likes WHERE post_id = ? AND username = ?',
+      [row.id, currentUsername]
+    );
+
+    posts.push({
+      id: row.id,
+      userId: row.user_id,
+      username: row.username,
+      imageUri: row.image_uri,
+      uri: row.image_uri,
+      description: row.description,
+      location: row.location,
+      likes: row.likes_count,
+      liked: !!likeRow,
+      saved: true,
+      createdAt: row.created_at,
+      isDemo: row.is_demo === 1,
+      comments,
+    });
+  }
+
+  return posts;
+}
+
+export async function getPostOwner(db, postId) {
+  return db.getFirstAsync(
+    'SELECT user_id as userId, username, image_uri as imageUri FROM posts WHERE id = ?',
+    [postId]
+  );
 }
 
 export async function togglePostLike(db, postId, username) {

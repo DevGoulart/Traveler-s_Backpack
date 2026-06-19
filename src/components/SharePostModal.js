@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -12,11 +12,13 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import Avatar from './Avatar';
 import { useSocial } from '../context/SocialContext';
-import colors from '../theme/colors';
+import { useTheme } from '../context/ThemeContext';
 import spacing from '../theme/spacing';
 
 export default function SharePostModal({ visible, post, onClose, onSendDM }) {
   const { allUsers, getAvatarUri } = useSocial();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [mode, setMode] = useState(null);
 
   const handleExternalShare = async () => {
@@ -117,7 +119,8 @@ export default function SharePostModal({ visible, post, onClose, onSendDM }) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(colors) {
+  return StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -211,4 +214,5 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     paddingVertical: spacing.xl,
   },
-});
+  });
+}

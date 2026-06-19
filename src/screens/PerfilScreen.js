@@ -1,20 +1,26 @@
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Image, FlatList, Pressable, Share, Alert } from 'react-native';
+import { useMemo, useState } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Image, FlatList, Pressable, Share, Alert, Switch } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Avatar from '../components/Avatar';
 import { useSocial } from '../context/SocialContext';
-import colors from '../theme/colors';
+import { useTheme } from '../context/ThemeContext';
 import spacing from '../theme/spacing';
 
 export default function PerfilScreen({ navigation }) {
   const insets = useSafeAreaInsets();
-  const { currentUser, userBio, profilePhotoUri, userPosts, logout, getAvatarUri, currentUserId } = useSocial();
+  const { colors, isDark, toggleTheme } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const { currentUser, userBio, profilePhotoUri, userPosts, savedPosts, logout, getAvatarUri, currentUserId } = useSocial();
+  const [activeTab, setActiveTab] = useState('posts');
 
   const username = currentUser || 'Viajante';
   const bio = userBio || 'Explorador 🌍 | Compartilhando aventuras pelo mundo';
   const postCount = userPosts.length;
   const followers = 128;
   const following = 96;
+
+  const gridData = activeTab === 'posts' ? userPosts : savedPosts;
 
   const botoes = [
     { nome: 'Biometria', rota: 'Biometria', icon: 'finger-print-outline' },
@@ -87,17 +93,31 @@ export default function PerfilScreen({ navigation }) {
       </View>
 
       <View style={styles.tabs}>
-        <View style={styles.tabActive}>
-          <Ionicons name="grid" size={22} color={colors.text} />
-        </View>
-        <View style={styles.tab}>
-          <Ionicons name="bookmark-outline" size={22} color={colors.textSecondary} />
-        </View>
+        <Pressable
+          style={[styles.tab, activeTab === 'posts' && styles.tabActive]}
+          onPress={() => setActiveTab('posts')}
+        >
+          <Ionicons
+            name="grid"
+            size={22}
+            color={activeTab === 'posts' ? colors.text : colors.textSecondary}
+          />
+        </Pressable>
+        <Pressable
+          style={[styles.tab, activeTab === 'saved' && styles.tabActive]}
+          onPress={() => setActiveTab('saved')}
+        >
+          <Ionicons
+            name={activeTab === 'saved' ? 'bookmark' : 'bookmark-outline'}
+            size={22}
+            color={activeTab === 'saved' ? colors.text : colors.textSecondary}
+          />
+        </Pressable>
       </View>
 
-      {userPosts.length > 0 ? (
+      {gridData.length > 0 ? (
         <FlatList
-          data={userPosts}
+          data={gridData}
           keyExtractor={(item) => item.id}
           numColumns={3}
           scrollEnabled={false}
@@ -105,16 +125,36 @@ export default function PerfilScreen({ navigation }) {
         />
       ) : (
         <View style={styles.emptyGrid}>
-          <Ionicons name="camera-outline" size={48} color={colors.textMuted} />
-          <Text style={styles.emptyTitle}>Nenhum post ainda</Text>
+          <Ionicons
+            name={activeTab === 'saved' ? 'bookmark-outline' : 'camera-outline'}
+            size={48}
+            color={colors.textMuted}
+          />
+          <Text style={styles.emptyTitle}>
+            {activeTab === 'saved' ? 'Nenhum post salvo' : 'Nenhum post ainda'}
+          </Text>
           <Text style={styles.emptyText}>
-            Use a câmera para capturar e compartilhar suas aventuras!
+            {activeTab === 'saved'
+              ? 'Toque no ícone de salvar nos posts para vê-los aqui.'
+              : 'Use a câmera para capturar e compartilhar suas aventuras!'}
           </Text>
         </View>
       )}
 
       <View style={styles.utilitiesSection}>
         <Text style={styles.utilitiesTitle}>Ferramentas</Text>
+
+        <View style={styles.utilityButton}>
+          <Ionicons name={isDark ? 'moon' : 'sunny-outline'} size={22} color={colors.primary} />
+          <Text style={styles.utilityText}>Modo escuro</Text>
+          <Switch
+            value={isDark}
+            onValueChange={toggleTheme}
+            trackColor={{ false: colors.border, true: colors.primaryLight }}
+            thumbColor={colors.surface}
+          />
+        </View>
+
         {botoes.map((botao) => (
           <TouchableOpacity
             key={botao.rota}
@@ -138,167 +178,166 @@ export default function PerfilScreen({ navigation }) {
 
 const GRID_SIZE = '33.33%';
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  header: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.lg,
-    backgroundColor: colors.surface,
-  },
-  profileRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xl,
-  },
-  stats: {
-    flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  statItem: {
-    alignItems: 'center',
-  },
-  statNumber: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  statLabel: {
-    fontSize: 13,
-    color: colors.textSecondary,
-  },
-  displayName: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.text,
-    marginTop: spacing.md,
-  },
-  bio: {
-    fontSize: 14,
-    color: colors.text,
-    marginTop: spacing.xs,
-    lineHeight: 20,
-  },
-  actionRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginTop: spacing.md,
-  },
-  editButton: {
-    flex: 1,
-    backgroundColor: colors.borderLight,
-    paddingVertical: spacing.sm,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  editButtonText: {
-    fontWeight: '600',
-    color: colors.text,
-    fontSize: 14,
-  },
-  shareButton: {
-    backgroundColor: colors.borderLight,
-    paddingHorizontal: spacing.md,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  tabs: {
-    flexDirection: 'row',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  tabActive: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.text,
-  },
-  tab: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-  },
-  gridItem: {
-    width: GRID_SIZE,
-    aspectRatio: 1,
-    padding: 1,
-  },
-  gridImage: {
-    flex: 1,
-    backgroundColor: colors.borderLight,
-  },
-  gridPlaceholder: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyGrid: {
-    alignItems: 'center',
-    paddingVertical: spacing.xxl * 2,
-    backgroundColor: colors.surface,
-  },
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.text,
-    marginTop: spacing.md,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginTop: spacing.xs,
-    paddingHorizontal: spacing.xxl,
-  },
-  utilitiesSection: {
-    marginTop: spacing.lg,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xxl,
-  },
-  utilitiesTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.md,
-  },
-  utilityButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.lg,
-    borderRadius: 12,
-    marginBottom: spacing.sm,
-    gap: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-  },
-  utilityText: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  logoutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.md,
-    paddingVertical: spacing.lg,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.danger,
-    backgroundColor: colors.surface,
-  },
-  logoutText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.danger,
-  },
-});
+function createStyles(colors) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    header: {
+      paddingHorizontal: spacing.lg,
+      paddingBottom: spacing.lg,
+      backgroundColor: colors.surface,
+    },
+    profileRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xl,
+    },
+    stats: {
+      flex: 1,
+      flexDirection: 'row',
+      justifyContent: 'space-around',
+    },
+    statItem: {
+      alignItems: 'center',
+    },
+    statNumber: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    statLabel: {
+      fontSize: 13,
+      color: colors.textSecondary,
+    },
+    displayName: {
+      fontSize: 15,
+      fontWeight: '700',
+      color: colors.text,
+      marginTop: spacing.md,
+    },
+    bio: {
+      fontSize: 14,
+      color: colors.text,
+      marginTop: spacing.xs,
+      lineHeight: 20,
+    },
+    actionRow: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+      marginTop: spacing.md,
+    },
+    editButton: {
+      flex: 1,
+      backgroundColor: colors.borderLight,
+      paddingVertical: spacing.sm,
+      borderRadius: 8,
+      alignItems: 'center',
+    },
+    editButtonText: {
+      fontWeight: '600',
+      color: colors.text,
+      fontSize: 14,
+    },
+    shareButton: {
+      backgroundColor: colors.borderLight,
+      paddingHorizontal: spacing.md,
+      borderRadius: 8,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    tabs: {
+      flexDirection: 'row',
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+      backgroundColor: colors.surface,
+    },
+    tabActive: {
+      borderBottomWidth: 1,
+      borderBottomColor: colors.text,
+    },
+    tab: {
+      flex: 1,
+      alignItems: 'center',
+      paddingVertical: spacing.md,
+    },
+    gridItem: {
+      width: GRID_SIZE,
+      aspectRatio: 1,
+      padding: 1,
+    },
+    gridImage: {
+      flex: 1,
+      backgroundColor: colors.borderLight,
+    },
+    gridPlaceholder: {
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    emptyGrid: {
+      alignItems: 'center',
+      paddingVertical: spacing.xxl * 2,
+      backgroundColor: colors.surface,
+    },
+    emptyTitle: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: colors.text,
+      marginTop: spacing.md,
+    },
+    emptyText: {
+      fontSize: 14,
+      color: colors.textSecondary,
+      textAlign: 'center',
+      marginTop: spacing.xs,
+      paddingHorizontal: spacing.xxl,
+    },
+    utilitiesSection: {
+      marginTop: spacing.lg,
+      paddingHorizontal: spacing.lg,
+      paddingBottom: spacing.xxl,
+    },
+    utilitiesTitle: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: colors.text,
+      marginBottom: spacing.md,
+    },
+    utilityButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.surface,
+      paddingVertical: spacing.lg,
+      paddingHorizontal: spacing.lg,
+      borderRadius: 12,
+      marginBottom: spacing.sm,
+      gap: spacing.md,
+      borderWidth: 1,
+      borderColor: colors.borderLight,
+    },
+    utilityText: {
+      flex: 1,
+      fontSize: 15,
+      fontWeight: '600',
+      color: colors.text,
+    },
+    logoutButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.sm,
+      marginTop: spacing.md,
+      paddingVertical: spacing.lg,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.danger,
+      backgroundColor: colors.surface,
+    },
+    logoutText: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: colors.danger,
+    },
+  });
+}

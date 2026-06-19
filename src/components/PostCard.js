@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,10 +8,14 @@ import {
   TextInput,
   Modal,
   FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  Keyboard,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Avatar from './Avatar';
-import colors from '../theme/colors';
+import { useTheme } from '../context/ThemeContext';
 import spacing from '../theme/spacing';
 
 function timeAgo(dateString) {
@@ -23,16 +27,51 @@ function timeAgo(dateString) {
   return `${days}d`;
 }
 
-export default function PostCard({ post, onLike, onComment, onShare, getAvatarUri }) {
+export default function PostCard({ post, onLike, onComment, onShare, onSave, getAvatarUri }) {
+  const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [liked, setLiked] = useState(post.liked);
   const [likes, setLikes] = useState(post.likes);
+  const [saved, setSaved] = useState(post.saved ?? false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    setLiked(post.liked);
+    setLikes(post.likes);
+    setSaved(post.saved ?? false);
+  }, [post.liked, post.likes, post.saved]);
+
+  useEffect(() => {
+    if (!showComments) return undefined;
+
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const onShow = (event) => setKeyboardHeight(event.endCoordinates.height);
+    const onHide = () => setKeyboardHeight(0);
+
+    const showSub = Keyboard.addListener(showEvent, onShow);
+    const hideSub = Keyboard.addListener(hideEvent, onHide);
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, [showComments]);
 
   const handleLike = () => {
     setLiked(!liked);
     setLikes(liked ? likes - 1 : likes + 1);
     onLike(post.id);
+  };
+
+  const handleSave = () => {
+    setSaved(!saved);
+    onSave?.(post.id);
   };
 
   const handleComment = () => {
@@ -48,6 +87,9 @@ export default function PostCard({ post, onLike, onComment, onShare, getAvatarUr
       : null;
 
   const authorAvatarUri = getAvatarUri(post.username, post.userId);
+  const inputBottomPadding = keyboardHeight > 0
+    ? keyboardHeight - insets.bottom + spacing.sm
+    : insets.bottom + spacing.sm;
 
   return (
     <View style={styles.card}>
@@ -86,7 +128,13 @@ export default function PostCard({ post, onLike, onComment, onShare, getAvatarUr
             <Ionicons name="paper-plane-outline" size={24} color={colors.text} />
           </Pressable>
         </View>
-        <Ionicons name="bookmark-outline" size={24} color={colors.text} />
+        <Pressable onPress={handleSave} hitSlop={8}>
+          <Ionicons
+            name={saved ? 'bookmark' : 'bookmark-outline'}
+            size={24}
+            color={saved ? colors.text : colors.text}
+          />
+        </Pressable>
       </View>
 
       <Text style={styles.likes}>{likes} curtidas</Text>
@@ -109,207 +157,218 @@ export default function PostCard({ post, onLike, onComment, onShare, getAvatarUr
       <Text style={styles.time}>{timeAgo(post.createdAt)}</Text>
 
       <Modal visible={showComments} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Comentários</Text>
-              <Pressable onPress={() => setShowComments(false)}>
-                <Ionicons name="close" size={24} color={colors.text} />
-              </Pressable>
-            </View>
+        <KeyboardAvoidingView
+          style={styles.modalFlex}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <Pressable style={styles.modalOverlay} onPress={() => setShowComments(false)}>
+            <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Comentários</Text>
+                <Pressable onPress={() => setShowComments(false)}>
+                  <Ionicons name="close" size={24} color={colors.text} />
+                </Pressable>
+              </View>
 
-            <FlatList
-              data={post.comments}
-              keyExtractor={(item) => item.id}
-              style={styles.commentsList}
-              ListEmptyComponent={
-                <Text style={styles.emptyComments}>Nenhum comentário ainda. Seja o primeiro!</Text>
-              }
-              renderItem={({ item }) => (
-                <View style={styles.commentRow}>
-                  <Avatar
-                    name={item.username}
-                    uri={getAvatarUri(item.username)}
-                    size={32}
-                  />
-                  <View style={styles.commentBody}>
-                    <Text style={styles.commentText}>
-                      <Text style={styles.captionUser}>{item.username} </Text>
-                      {item.text}
-                    </Text>
+              <FlatList
+                data={post.comments}
+                keyExtractor={(item) => item.id}
+                style={styles.commentsList}
+                keyboardShouldPersistTaps="handled"
+                ListEmptyComponent={
+                  <Text style={styles.emptyComments}>Nenhum comentário ainda. Seja o primeiro!</Text>
+                }
+                renderItem={({ item }) => (
+                  <View style={styles.commentRow}>
+                    <Avatar
+                      name={item.username}
+                      uri={getAvatarUri(item.username)}
+                      size={32}
+                    />
+                    <View style={styles.commentBody}>
+                      <Text style={styles.commentText}>
+                        <Text style={styles.captionUser}>{item.username} </Text>
+                        {item.text}
+                      </Text>
+                    </View>
                   </View>
-                </View>
-              )}
-            />
-
-            <View style={styles.commentInputRow}>
-              <TextInput
-                style={styles.commentInput}
-                placeholder="Adicionar comentário..."
-                placeholderTextColor={colors.textSecondary}
-                value={commentText}
-                onChangeText={setCommentText}
-                onSubmitEditing={handleComment}
+                )}
               />
-              <Pressable onPress={handleComment}>
-                <Text style={[styles.postButton, !commentText.trim() && styles.postButtonDisabled]}>
-                  Publicar
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
+
+              <View style={[styles.commentInputRow, { paddingBottom: inputBottomPadding }]}>
+                <TextInput
+                  style={styles.commentInput}
+                  placeholder="Adicionar comentário..."
+                  placeholderTextColor={colors.textSecondary}
+                  value={commentText}
+                  onChangeText={setCommentText}
+                  onSubmitEditing={handleComment}
+                  returnKeyType="send"
+                />
+                <Pressable onPress={handleComment}>
+                  <Text style={[styles.postButton, !commentText.trim() && styles.postButtonDisabled]}>
+                    Publicar
+                  </Text>
+                </Pressable>
+              </View>
+            </Pressable>
+          </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.surface,
-    marginBottom: spacing.sm,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing.md,
-    gap: spacing.sm,
-  },
-  headerText: {
-    flex: 1,
-  },
-  username: {
-    fontWeight: '700',
-    fontSize: 14,
-    color: colors.text,
-  },
-  location: {
-    fontSize: 12,
-    color: colors.textSecondary,
-  },
-  image: {
-    width: '100%',
-    aspectRatio: 1,
-    backgroundColor: colors.borderLight,
-  },
-  imagePlaceholder: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  actions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-  },
-  actionsLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  actionIcon: {
-    marginHorizontal: spacing.md,
-  },
-  likes: {
-    fontWeight: '700',
-    fontSize: 14,
-    color: colors.text,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-  },
-  caption: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.xs,
-  },
-  captionText: {
-    fontSize: 14,
-    color: colors.text,
-    lineHeight: 20,
-  },
-  captionUser: {
-    fontWeight: '700',
-  },
-  viewComments: {
-    color: colors.textSecondary,
-    fontSize: 14,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.xs,
-  },
-  time: {
-    color: colors.textSecondary,
-    fontSize: 11,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.xs,
-    paddingBottom: spacing.md,
-    textTransform: 'uppercase',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    maxHeight: '70%',
-    paddingBottom: spacing.xl,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: spacing.lg,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  modalTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  commentsList: {
-    maxHeight: 300,
-    padding: spacing.lg,
-  },
-  emptyComments: {
-    color: colors.textSecondary,
-    textAlign: 'center',
-    paddingVertical: spacing.xl,
-  },
-  commentRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  commentBody: {
-    flex: 1,
-  },
-  commentText: {
-    fontSize: 14,
-    color: colors.text,
-    lineHeight: 20,
-  },
-  commentInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-    paddingTop: spacing.md,
-  },
-  commentInput: {
-    flex: 1,
-    fontSize: 14,
-    color: colors.text,
-    paddingVertical: spacing.sm,
-  },
-  postButton: {
-    color: colors.primary,
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  postButtonDisabled: {
-    opacity: 0.4,
-  },
-});
+function createStyles(colors) {
+  return StyleSheet.create({
+    card: {
+      backgroundColor: colors.surface,
+      marginBottom: spacing.sm,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      padding: spacing.md,
+      gap: spacing.sm,
+    },
+    headerText: {
+      flex: 1,
+    },
+    username: {
+      fontWeight: '700',
+      fontSize: 14,
+      color: colors.text,
+    },
+    location: {
+      fontSize: 12,
+      color: colors.textSecondary,
+    },
+    image: {
+      width: '100%',
+      aspectRatio: 1,
+      backgroundColor: colors.borderLight,
+    },
+    imagePlaceholder: {
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    actions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: spacing.md,
+      paddingTop: spacing.sm,
+    },
+    actionsLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    actionIcon: {
+      marginHorizontal: spacing.md,
+    },
+    likes: {
+      fontWeight: '700',
+      fontSize: 14,
+      color: colors.text,
+      paddingHorizontal: spacing.md,
+      paddingTop: spacing.sm,
+    },
+    caption: {
+      paddingHorizontal: spacing.md,
+      paddingTop: spacing.xs,
+    },
+    captionText: {
+      fontSize: 14,
+      color: colors.text,
+      lineHeight: 20,
+    },
+    captionUser: {
+      fontWeight: '700',
+    },
+    viewComments: {
+      color: colors.textSecondary,
+      fontSize: 14,
+      paddingHorizontal: spacing.md,
+      paddingTop: spacing.xs,
+    },
+    time: {
+      color: colors.textSecondary,
+      fontSize: 11,
+      paddingHorizontal: spacing.md,
+      paddingTop: spacing.xs,
+      paddingBottom: spacing.md,
+      textTransform: 'uppercase',
+    },
+    modalFlex: {
+      flex: 1,
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      justifyContent: 'flex-end',
+    },
+    modalContent: {
+      backgroundColor: colors.surface,
+      borderTopLeftRadius: 16,
+      borderTopRightRadius: 16,
+      maxHeight: '70%',
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: spacing.lg,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    modalTitle: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    commentsList: {
+      maxHeight: 300,
+      padding: spacing.lg,
+    },
+    emptyComments: {
+      color: colors.textSecondary,
+      textAlign: 'center',
+      paddingVertical: spacing.xl,
+    },
+    commentRow: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+      marginBottom: spacing.md,
+    },
+    commentBody: {
+      flex: 1,
+    },
+    commentText: {
+      fontSize: 14,
+      color: colors.text,
+      lineHeight: 20,
+    },
+    commentInputRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: spacing.lg,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+      paddingTop: spacing.md,
+    },
+    commentInput: {
+      flex: 1,
+      fontSize: 14,
+      color: colors.text,
+      paddingVertical: spacing.sm,
+    },
+    postButton: {
+      color: colors.primary,
+      fontWeight: '700',
+      fontSize: 14,
+    },
+    postButtonDisabled: {
+      opacity: 0.4,
+    },
+  });
+}

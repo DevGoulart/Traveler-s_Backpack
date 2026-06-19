@@ -6,6 +6,7 @@ import * as storiesRepo from './repositories/storiesRepository';
 import * as cameraRepo from './repositories/cameraRepository';
 import * as settingsRepo from './repositories/settingsRepository';
 import * as authRepo from './repositories/authRepository';
+import * as activitiesRepo from './repositories/activitiesRepository';
 
 const DB_NAME = 'travelers_backpack.db';
 
@@ -140,6 +141,7 @@ export async function initDatabase() {
   await authRepo.seedDefaultUsers(db);
   await migrateLegacySession(db);
   await seedDemoData(db);
+  await activitiesRepo.seedDemoActivities(db);
   return db;
 }
 
