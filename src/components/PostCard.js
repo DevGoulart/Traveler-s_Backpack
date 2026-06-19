@@ -11,10 +11,10 @@ import {
   Platform,
   Keyboard,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Avatar from './Avatar';
 import { useTheme } from '../context/ThemeContext';
+import { useAppInsets } from '../hooks/useAppInsets';
 import spacing from '../theme/spacing';
 
 function timeAgo(dateString) {
@@ -27,7 +27,7 @@ function timeAgo(dateString) {
 }
 
 export default function PostCard({ post, onLike, onComment, onShare, onSave, getAvatarUri }) {
-  const insets = useSafeAreaInsets();
+  const { bottomPadding } = useAppInsets();
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -88,7 +88,7 @@ export default function PostCard({ post, onLike, onComment, onShare, onSave, get
   const authorAvatarUri = getAvatarUri(post.username, post.userId);
   const keyboardOffset = Platform.OS === 'android'
     ? keyboardHeight
-    : Math.max(0, keyboardHeight - insets.bottom);
+    : Math.max(0, keyboardHeight - bottomPadding);
 
   return (
     <View style={styles.card}>
@@ -194,7 +194,7 @@ export default function PostCard({ post, onLike, onComment, onShare, onSave, get
                 )}
               />
 
-              <View style={[styles.commentInputRow, { paddingBottom: insets.bottom + spacing.sm }]}>
+              <View style={[styles.commentInputRow, { paddingBottom: bottomPadding }]}>
                 <TextInput
                   style={styles.commentInput}
                   placeholder="Adicionar comentário..."

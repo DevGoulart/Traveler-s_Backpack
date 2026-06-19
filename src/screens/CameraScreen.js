@@ -1,40 +1,74 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Location from 'expo-location';
-import { useEffect, useRef, useState, useMemo } from 'react';
+import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Image,
   Pressable,
-  ScrollView,
   TextInput,
   ActivityIndicator,
   Alert,
+  Dimensions,
 } from 'react-native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSocial } from '../context/SocialContext';
-import { loadCameraHistory, saveCameraPhoto, clearCameraHistory as clearCameraHistoryDb } from '../storage/socialStorage';
+import { loadCameraHistory, saveCameraPhoto } from '../storage/socialStorage';
 import { useTheme } from '../context/ThemeContext';
+import { useAppInsets } from '../hooks/useAppInsets';
 import spacing from '../theme/spacing';
 
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const MAX_HISTORY_ITEMS = 10;
+const MODES = [
+  { id: 'story', label: 'STORY' },
+  { id: 'post', label: 'POST' },
+];
 
 export default function CameraScreen() {
   const cameraRef = useRef(null);
-  const insets = useSafeAreaInsets();
+  const navigation = useNavigation();
+  const { top, bottomPadding, tabBarBaseHeight } = useAppInsets();
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
+
   const [permission, requestPermission] = useCameraPermissions();
   const [history, setHistory] = useState([]);
   const [selectedPhoto, setSelectedPhoto] = useState(null);
   const [publishMode, setPublishMode] = useState('post');
   const [caption, setCaption] = useState('');
   const [publishing, setPublishing] = useState(false);
-  const [showPublishPanel, setShowPublishPanel] = useState(false);
+  const [previewVisible, setPreviewVisible] = useState(false);
+  const [facing, setFacing] = useState('back');
+  const [flash, setFlash] = useState('off');
+  const [capturing, setCapturing] = useState(false);
 
   const { currentUser, addPost, addStory } = useSocial();
+
+  const bottomControlsPadding = bottomPadding + spacing.lg;
+
+  useFocusEffect(
+    useCallback(() => {
+      const parent = navigation.getParent();
+      if (!parent) return undefined;
+
+      parent.setOptions({ tabBarStyle: { display: 'none' } });
+
+      return () => {
+        parent.setOptions({
+          tabBarStyle: {
+            backgroundColor: colors.surface,
+            borderTopColor: colors.border,
+            height: tabBarBaseHeight + bottomPadding,
+            paddingBottom: bottomPadding,
+            paddingTop: spacing.sm,
+          },
+        });
+      };
+    }, [navigation, colors, bottomPadding, tabBarBaseHeight])
+  );
 
   const normalizeHistory = (items) => {
     if (!Array.isArray(items)) return [];
@@ -55,6 +89,7 @@ export default function CameraScreen() {
             id: entry.id || `${Date.now()}-${index}`,
             uri: entry.uri,
             description: entry.description || 'Localização indisponível.',
+            locationShort: entry.locationShort || null,
             createdAt: entry.createdAt || null,
           };
         }
@@ -101,11 +136,7 @@ export default function CameraScreen() {
     const loadHistory = async () => {
       try {
         const stored = await loadCameraHistory();
-        const normalized = normalizeHistory(stored);
-        setHistory(normalized);
-        if (normalized.length > 0) {
-          setSelectedPhoto(normalized[0]);
-        }
+        setHistory(normalizeHistory(stored));
       } catch {
         setHistory([]);
       }
@@ -114,11 +145,23 @@ export default function CameraScreen() {
     loadHistory();
   }, []);
 
-  const takePhoto = async () => {
-    if (!cameraRef.current) return;
+  const openPreview = (photo) => {
+    setSelectedPhoto(photo);
+    setCaption('');
+    setPreviewVisible(true);
+  };
 
+  const closePreview = () => {
+    setPreviewVisible(false);
+    setCaption('');
+  };
+
+  const takePhoto = async () => {
+    if (!cameraRef.current || capturing) return;
+
+    setCapturing(true);
     try {
-      const photo = await cameraRef.current.takePictureAsync({ quality: 0.7 });
+      const photo = await cameraRef.current.takePictureAsync({ quality: 0.85 });
       const uri = photo?.uri;
       if (!uri) {
         Alert.alert('Erro', 'Não foi possível capturar a foto. Tente novamente.');
@@ -135,13 +178,13 @@ export default function CameraScreen() {
       };
 
       const updatedHistory = [newItem, ...history].slice(0, MAX_HISTORY_ITEMS);
-      setSelectedPhoto(newItem);
       setHistory(updatedHistory);
-      setShowPublishPanel(true);
-      setCaption('');
       await saveCameraPhoto(newItem);
+      openPreview(newItem);
     } catch {
       Alert.alert('Erro', 'Falha ao tirar a foto. Verifique as permissões da câmera.');
+    } finally {
+      setCapturing(false);
     }
   };
 
@@ -169,8 +212,7 @@ export default function CameraScreen() {
         });
       }
 
-      setShowPublishPanel(false);
-      setCaption('');
+      closePreview();
       Alert.alert('Publicado!', publishMode === 'story' ? 'Seu story foi adicionado.' : 'Seu post foi compartilhado.');
     } catch {
       Alert.alert('Erro', 'Não foi possível publicar. Tente novamente.');
@@ -179,19 +221,24 @@ export default function CameraScreen() {
     }
   };
 
-  const clearHistory = async () => {
-    setHistory([]);
-    setSelectedPhoto(null);
-    setShowPublishPanel(false);
-    await clearCameraHistoryDb();
+  const cycleFlash = () => {
+    setFlash((current) => {
+      if (current === 'off') return 'on';
+      if (current === 'on') return 'auto';
+      return 'off';
+    });
   };
 
-  if (!permission) return <View style={styles.container} />;
+  const flashIcon = flash === 'on' ? 'flash' : flash === 'auto' ? 'flash-outline' : 'flash-off-outline';
+
+  if (!permission) {
+    return <View style={styles.blackScreen} />;
+  }
 
   if (!permission.granted) {
     return (
       <View style={styles.permissionContainer}>
-        <Ionicons name="camera-outline" size={64} color={colors.primary} />
+        <Ionicons name="camera-outline" size={64} color="#fff" />
         <Text style={styles.permissionTitle}>Acesso à câmera</Text>
         <Text style={styles.permissionText}>
           Permita o acesso para capturar fotos e compartilhar suas aventuras.
@@ -203,383 +250,347 @@ export default function CameraScreen() {
     );
   }
 
-  return (
-    <View style={[styles.container, { paddingTop: insets.top + spacing.md }]}>
-      <View style={styles.topSection}>
-        <Text style={styles.screenTitle}>Câmera</Text>
+  if (previewVisible && selectedPhoto) {
+    return (
+      <View style={styles.blackScreen}>
+        <Image source={{ uri: selectedPhoto.uri }} style={styles.previewImage} resizeMode="cover" />
 
-        <View style={styles.modeSelector}>
-          <Pressable
-            style={[styles.modeButton, publishMode === 'post' && styles.modeButtonActive]}
-            onPress={() => setPublishMode('post')}
-          >
-            <Ionicons
-              name="grid-outline"
-              size={18}
-              color={publishMode === 'post' ? '#fff' : colors.textSecondary}
-            />
-            <Text style={[styles.modeText, publishMode === 'post' && styles.modeTextActive]}>Post</Text>
+        <View style={[styles.previewTopBar, { paddingTop: top + spacing.sm }]}>
+          <Pressable onPress={closePreview} hitSlop={12} style={styles.iconButton}>
+            <Ionicons name="arrow-back" size={28} color="#fff" />
           </Pressable>
-          <Pressable
-            style={[styles.modeButton, publishMode === 'story' && styles.modeButtonActive]}
-            onPress={() => setPublishMode('story')}
-          >
-            <Ionicons
-              name="ellipse-outline"
-              size={18}
-              color={publishMode === 'story' ? '#fff' : colors.textSecondary}
-            />
-            <Text style={[styles.modeText, publishMode === 'story' && styles.modeTextActive]}>Story</Text>
-          </Pressable>
+          <Text style={styles.previewTitle}>
+            {publishMode === 'story' ? 'Novo story' : 'Nova publicação'}
+          </Text>
+          <View style={styles.iconButton} />
         </View>
 
-        <View style={styles.cameraWrapper}>
-          <CameraView ref={cameraRef} style={styles.camera} facing="back" />
-          <Pressable style={styles.captureButton} onPress={takePhoto}>
-            <View style={styles.captureInner} />
+        <View style={[styles.previewBottom, { paddingBottom: bottomControlsPadding }]}>
+          {publishMode === 'post' && (
+            <TextInput
+              style={styles.captionInput}
+              placeholder="Escreva uma legenda..."
+              placeholderTextColor="rgba(255,255,255,0.6)"
+              value={caption}
+              onChangeText={setCaption}
+              multiline
+              maxLength={500}
+            />
+          )}
+
+          {selectedPhoto.locationShort ? (
+            <View style={styles.locationRow}>
+              <Ionicons name="location-outline" size={16} color="#fff" />
+              <Text style={styles.locationText} numberOfLines={1}>
+                {selectedPhoto.locationShort}
+              </Text>
+            </View>
+          ) : null}
+
+          <Pressable
+            style={[styles.shareButton, publishing && styles.shareButtonDisabled]}
+            onPress={publishPhoto}
+            disabled={publishing}
+          >
+            {publishing ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <Text style={styles.shareButtonText}>
+                {publishMode === 'story' ? 'Compartilhar no story' : 'Compartilhar'}
+              </Text>
+            )}
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.blackScreen}>
+      <CameraView
+        ref={cameraRef}
+        style={styles.camera}
+        facing={facing}
+        flash={flash}
+      />
+
+      <View style={[styles.topOverlay, { paddingTop: top + spacing.sm }]}>
+        <View style={styles.topSpacer} />
+        <View style={styles.topActions}>
+          <Pressable onPress={cycleFlash} hitSlop={12} style={styles.iconButton}>
+            <Ionicons name={flashIcon} size={26} color="#fff" />
+          </Pressable>
+          <Pressable
+            onPress={() => setFacing((f) => (f === 'back' ? 'front' : 'back'))}
+            hitSlop={12}
+            style={styles.iconButton}
+          >
+            <Ionicons name="camera-reverse-outline" size={26} color="#fff" />
           </Pressable>
         </View>
       </View>
 
-      <ScrollView
-        style={styles.bottomScroll}
-        contentContainerStyle={styles.bottomContent}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        {showPublishPanel && selectedPhoto ? (
-          <View style={styles.publishPanel}>
-            <Image source={{ uri: selectedPhoto.uri }} style={styles.publishPreview} />
-            <View style={styles.publishContent}>
-              <Text style={styles.publishTitle}>
-                Publicar como {publishMode === 'story' ? 'Story' : 'Post'}
+      <View style={[styles.bottomOverlay, { paddingBottom: bottomControlsPadding }]}>
+        <View style={styles.modeRow}>
+          {MODES.map((mode) => (
+            <Pressable
+              key={mode.id}
+              onPress={() => setPublishMode(mode.id)}
+              style={styles.modeItem}
+            >
+              <Text
+                style={[
+                  styles.modeLabel,
+                  publishMode === mode.id && styles.modeLabelActive,
+                ]}
+              >
+                {mode.label}
               </Text>
-              {publishMode === 'post' && (
-                <TextInput
-                  style={styles.captionInput}
-                  placeholder="Escreva uma legenda..."
-                  placeholderTextColor={colors.textSecondary}
-                  value={caption}
-                  onChangeText={setCaption}
-                  multiline
-                />
-              )}
-              <View style={styles.publishActions}>
-                <Pressable style={styles.cancelButton} onPress={() => setShowPublishPanel(false)}>
-                  <Text style={styles.cancelText}>Cancelar</Text>
-                </Pressable>
-                <Pressable style={styles.publishButton} onPress={publishPhoto} disabled={publishing}>
-                  {publishing ? (
-                    <ActivityIndicator color="#fff" size="small" />
-                  ) : (
-                    <Text style={styles.publishButtonText}>Compartilhar</Text>
-                  )}
-                </Pressable>
-              </View>
-            </View>
-          </View>
-        ) : null}
-
-        <View style={styles.historyHeader}>
-          <Text style={styles.sectionTitle}>Histórico recente</Text>
-          {history.length > 0 && (
-            <Pressable onPress={clearHistory}>
-              <Text style={styles.clearText}>Limpar</Text>
             </Pressable>
-          )}
+          ))}
         </View>
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.historyList}
-        >
-          {history.length === 0 ? (
-            <Text style={styles.emptyHistory}>Nenhuma foto ainda</Text>
-          ) : (
-            history.map((item) => (
-              <Pressable
-                key={item.id}
-                onPress={() => {
-                  setSelectedPhoto(item);
-                  setShowPublishPanel(true);
-                }}
-              >
-                <Image
-                  source={{ uri: item.uri }}
-                  style={[
-                    styles.previewImage,
-                    selectedPhoto?.id === item.id && styles.previewImageSelected,
-                  ]}
-                />
-              </Pressable>
-            ))
-          )}
-        </ScrollView>
+        <View style={styles.controlsRow}>
+          <Pressable
+            style={styles.galleryButton}
+            onPress={() => history[0] && openPreview(history[0])}
+            disabled={history.length === 0}
+          >
+            {history[0] ? (
+              <Image source={{ uri: history[0].uri }} style={styles.galleryThumb} />
+            ) : (
+              <View style={styles.galleryPlaceholder}>
+                <Ionicons name="images-outline" size={22} color="rgba(255,255,255,0.5)" />
+              </View>
+            )}
+          </Pressable>
 
-        {selectedPhoto && !showPublishPanel ? (
-          <View style={styles.detailCard}>
-            <Image source={{ uri: selectedPhoto.uri }} style={styles.detailImage} />
-            <Text style={styles.detailTitle}>Localização</Text>
-            <Text style={styles.detailDescription}>{selectedPhoto.description}</Text>
-            {selectedPhoto.createdAt ? (
-              <Text style={styles.detailDate}>
-                Capturada em: {new Date(selectedPhoto.createdAt).toLocaleString()}
-              </Text>
-            ) : null}
-            <Pressable
-              style={styles.republishButton}
-              onPress={() => setShowPublishPanel(true)}
-            >
-              <Text style={styles.republishText}>Publicar no feed</Text>
-            </Pressable>
-          </View>
-        ) : null}
-      </ScrollView>
+          <Pressable
+            style={styles.captureOuter}
+            onPress={takePhoto}
+            disabled={capturing}
+          >
+            <View style={[styles.captureInner, capturing && styles.captureInnerActive]} />
+          </Pressable>
+
+          <Pressable
+            style={styles.flipButton}
+            onPress={() => setFacing((f) => (f === 'back' ? 'front' : 'back'))}
+            hitSlop={8}
+          >
+            <Ionicons name="sync-outline" size={28} color="#fff" />
+          </Pressable>
+        </View>
+      </View>
     </View>
   );
 }
 
 function createStyles(colors) {
   return StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  topSection: {
-    paddingHorizontal: spacing.lg,
-  },
-  bottomScroll: {
-    flex: 1,
-  },
-  bottomContent: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xxl,
-  },
-  screenTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.md,
-  },
-  modeSelector: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  modeButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: 10,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  modeButtonActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  modeText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  modeTextActive: {
-    color: '#fff',
-  },
-  cameraWrapper: {
-    height: 340,
-    borderRadius: 16,
-    overflow: 'hidden',
-    backgroundColor: '#000',
-    position: 'relative',
-  },
-  camera: {
-    flex: 1,
-  },
-  captureButton: {
-    position: 'absolute',
-    bottom: spacing.lg,
-    alignSelf: 'center',
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    borderWidth: 4,
-    borderColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  captureInner: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: '#fff',
-  },
-  publishPanel: {
-    marginTop: spacing.lg,
-    borderRadius: 16,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: 'hidden',
-  },
-  publishPreview: {
-    width: '100%',
-    height: 200,
-    backgroundColor: colors.borderLight,
-  },
-  publishContent: {
-    padding: spacing.lg,
-    gap: spacing.md,
-  },
-  publishTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  captionInput: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 10,
-    padding: spacing.md,
-    minHeight: 80,
-    textAlignVertical: 'top',
-    color: colors.text,
-    fontSize: 14,
-  },
-  publishActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: spacing.md,
-  },
-  cancelButton: {
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
-  },
-  cancelText: {
-    color: colors.textSecondary,
-    fontWeight: '600',
-  },
-  publishButton: {
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.xl,
-    borderRadius: 10,
-    minWidth: 120,
-    alignItems: 'center',
-  },
-  publishButtonText: {
-    color: '#fff',
-    fontWeight: '700',
-  },
-  historyHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: spacing.xl,
-    marginBottom: spacing.sm,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  clearText: {
-    color: colors.danger,
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  historyList: {
-    gap: spacing.sm,
-    paddingBottom: spacing.sm,
-  },
-  emptyHistory: {
-    color: colors.textSecondary,
-  },
-  previewImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 10,
-    backgroundColor: colors.borderLight,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  previewImageSelected: {
-    borderColor: colors.primary,
-  },
-  detailCard: {
-    marginTop: spacing.lg,
-    borderRadius: 16,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.lg,
-    gap: spacing.sm,
-  },
-  detailImage: {
-    width: '100%',
-    height: 220,
-    borderRadius: 12,
-    backgroundColor: colors.borderLight,
-  },
-  detailTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  detailDescription: {
-    color: colors.textSecondary,
-    lineHeight: 20,
-  },
-  detailDate: {
-    color: colors.textMuted,
-    fontSize: 12,
-  },
-  republishButton: {
-    marginTop: spacing.sm,
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.md,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  republishText: {
-    color: '#fff',
-    fontWeight: '700',
-  },
-  permissionContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xxl,
-    backgroundColor: colors.background,
-    gap: spacing.md,
-  },
-  permissionTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  permissionText: {
-    fontSize: 15,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  permissionButton: {
-    marginTop: spacing.md,
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.xxl,
-    borderRadius: 12,
-  },
-  permissionButtonText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 16,
-  },
+    blackScreen: {
+      flex: 1,
+      backgroundColor: '#000',
+    },
+    camera: {
+      ...StyleSheet.absoluteFillObject,
+    },
+    topOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: spacing.lg,
+      zIndex: 10,
+    },
+    topSpacer: {
+      width: 80,
+    },
+    topActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.lg,
+    },
+    iconButton: {
+      width: 40,
+      height: 40,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    bottomOverlay: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      zIndex: 10,
+    },
+    modeRow: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      alignItems: 'center',
+      gap: spacing.xl,
+      marginBottom: spacing.lg,
+    },
+    modeItem: {
+      paddingVertical: spacing.xs,
+      paddingHorizontal: spacing.sm,
+    },
+    modeLabel: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: 'rgba(255,255,255,0.45)',
+      letterSpacing: 0.5,
+    },
+    modeLabelActive: {
+      color: '#fff',
+      fontWeight: '800',
+    },
+    controlsRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: spacing.xxl,
+    },
+    galleryButton: {
+      width: 44,
+      height: 44,
+      borderRadius: 8,
+      overflow: 'hidden',
+      borderWidth: 2,
+      borderColor: '#fff',
+    },
+    galleryThumb: {
+      width: '100%',
+      height: '100%',
+    },
+    galleryPlaceholder: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: 'rgba(255,255,255,0.12)',
+    },
+    captureOuter: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+      borderWidth: 4,
+      borderColor: '#fff',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    captureInner: {
+      width: 64,
+      height: 64,
+      borderRadius: 32,
+      backgroundColor: '#fff',
+    },
+    captureInnerActive: {
+      opacity: 0.6,
+      transform: [{ scale: 0.92 }],
+    },
+    flipButton: {
+      width: 44,
+      height: 44,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    previewImage: {
+      width: SCREEN_WIDTH,
+      height: SCREEN_HEIGHT,
+    },
+    previewTopBar: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: spacing.lg,
+      paddingBottom: spacing.md,
+      backgroundColor: 'rgba(0,0,0,0.35)',
+    },
+    previewTitle: {
+      color: '#fff',
+      fontSize: 17,
+      fontWeight: '700',
+    },
+    previewBottom: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.lg,
+      backgroundColor: 'rgba(0,0,0,0.55)',
+      gap: spacing.md,
+    },
+    captionInput: {
+      color: '#fff',
+      fontSize: 16,
+      minHeight: 44,
+      maxHeight: 100,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: 'rgba(255,255,255,0.3)',
+      paddingVertical: spacing.sm,
+    },
+    locationRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+    },
+    locationText: {
+      color: 'rgba(255,255,255,0.85)',
+      fontSize: 13,
+      flex: 1,
+    },
+    shareButton: {
+      backgroundColor: colors.primary,
+      paddingVertical: spacing.md + 2,
+      borderRadius: 10,
+      alignItems: 'center',
+    },
+    shareButtonDisabled: {
+      opacity: 0.7,
+    },
+    shareButtonText: {
+      color: '#fff',
+      fontWeight: '700',
+      fontSize: 16,
+    },
+    permissionContainer: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: spacing.xxl,
+      backgroundColor: '#000',
+      gap: spacing.md,
+    },
+    permissionTitle: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: '#fff',
+    },
+    permissionText: {
+      fontSize: 15,
+      color: 'rgba(255,255,255,0.7)',
+      textAlign: 'center',
+      lineHeight: 22,
+    },
+    permissionButton: {
+      marginTop: spacing.md,
+      backgroundColor: colors.primary,
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.xxl,
+      borderRadius: 12,
+    },
+    permissionButtonText: {
+      color: '#fff',
+      fontWeight: '700',
+      fontSize: 16,
+    },
   });
 }

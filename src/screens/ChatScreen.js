@@ -9,20 +9,31 @@ import {
   Image,
   Platform,
   Keyboard,
+  Modal,
+  ScrollView,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Avatar from '../components/Avatar';
+import PostCard from '../components/PostCard';
 import { useSocial } from '../context/SocialContext';
 import { useTheme } from '../context/ThemeContext';
+import { useAppInsets } from '../hooks/useAppInsets';
+import { buildPostFromShareMessage } from '../utils/postFromMessage';
 import spacing from '../theme/spacing';
 
-function MessageBubble({ message, isOwn, avatarUri, senderName, colors, styles }) {
+function MessageBubble({ message, isOwn, avatarUri, senderName, colors, styles, onOpenSharedPost }) {
   if (message.messageType === 'post_share') {
     return (
       <View style={[styles.bubbleRow, isOwn && styles.bubbleRowOwn]}>
         {!isOwn && <Avatar name={senderName} uri={avatarUri} size={28} />}
-        <View style={[styles.postShareBubble, isOwn ? styles.bubbleOwn : styles.bubbleOther]}>
+        <Pressable
+          onPress={() => onOpenSharedPost(message)}
+          style={({ pressed }) => [
+            styles.postShareBubble,
+            isOwn ? styles.bubbleOwn : styles.bubbleOther,
+            pressed && styles.postSharePressed,
+          ]}
+        >
           <Text style={[styles.shareLabel, isOwn && styles.textOwn]}>
             {isOwn ? 'Você compartilhou um post' : 'Post compartilhado'}
           </Text>
@@ -37,7 +48,10 @@ function MessageBubble({ message, isOwn, avatarUri, senderName, colors, styles }
               {message.postDescription}
             </Text>
           ) : null}
-        </View>
+          <Text style={[styles.shareTapHint, isOwn && styles.textOwn]}>
+            Toque para ver o post
+          </Text>
+        </Pressable>
       </View>
     );
   }
@@ -54,13 +68,23 @@ function MessageBubble({ message, isOwn, avatarUri, senderName, colors, styles }
 
 export default function ChatScreen({ route, navigation }) {
   const { conversationId, otherUser } = route.params;
-  const insets = useSafeAreaInsets();
+  const { top, bottomPadding } = useAppInsets();
   const { colors } = useTheme();
-  const { currentUserId, getAvatarUri, loadChatMessages, sendMessage } = useSocial();
+  const {
+    currentUserId,
+    getAvatarUri,
+    loadChatMessages,
+    sendMessage,
+    posts,
+    toggleLike,
+    toggleSave,
+    addComment,
+  } = useSocial();
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [sharedPost, setSharedPost] = useState(null);
   const listRef = useRef(null);
 
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -104,75 +128,113 @@ export default function ChatScreen({ route, navigation }) {
     }
   };
 
+  const handleOpenSharedPost = (message) => {
+    setSharedPost(buildPostFromShareMessage(message, posts));
+  };
+
+  const displayPost = sharedPost
+    ? posts.find((p) => p.id === sharedPost.id) || sharedPost
+    : null;
+
   const keyboardOffset = Platform.OS === 'android'
     ? keyboardHeight
-    : Math.max(0, keyboardHeight - insets.bottom);
+    : Math.max(0, keyboardHeight - bottomPadding);
 
   return (
-    <View style={[styles.flex, { paddingTop: insets.top, backgroundColor: colors.background }]}>
-      <View style={styles.header}>
-        <Pressable onPress={() => navigation.goBack()} hitSlop={12}>
-          <Ionicons name="arrow-back" size={26} color={colors.text} />
-        </Pressable>
-        <Avatar
-          name={otherUser.displayName}
-          uri={getAvatarUri(otherUser.displayName, otherUser.id)}
-          size={36}
-        />
-        <Text style={styles.headerName}>{otherUser.displayName}</Text>
-        <View style={{ width: 26 }} />
-      </View>
-
-      <FlatList
-        ref={listRef}
-        style={styles.flex}
-        data={messages}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.messagesList}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="interactive"
-        onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
-        onScrollBeginDrag={Keyboard.dismiss}
-        renderItem={({ item }) => (
-          <MessageBubble
-            message={item}
-            isOwn={item.senderId === currentUserId}
-            senderName={otherUser.displayName}
-            avatarUri={getAvatarUri(otherUser.displayName, otherUser.id)}
-            colors={colors}
-            styles={styles}
+    <>
+      <View style={[styles.flex, { paddingTop: top, backgroundColor: colors.background }]}>
+        <View style={styles.header}>
+          <Pressable onPress={() => navigation.goBack()} hitSlop={12}>
+            <Ionicons name="arrow-back" size={26} color={colors.text} />
+          </Pressable>
+          <Avatar
+            name={otherUser.displayName}
+            uri={getAvatarUri(otherUser.displayName, otherUser.id)}
+            size={36}
           />
-        )}
-      />
+          <Text style={styles.headerName}>{otherUser.displayName}</Text>
+          <View style={{ width: 26 }} />
+        </View>
 
-      <View
-        style={[
-          styles.inputBar,
-          {
-            paddingBottom: insets.bottom + spacing.sm,
-            transform: [{ translateY: -keyboardOffset }],
-          },
-        ]}
-      >
-        <TextInput
-          style={styles.input}
-          placeholder="Mensagem..."
-          placeholderTextColor={colors.textMuted}
-          value={text}
-          onChangeText={setText}
-          multiline
-          maxLength={500}
-          onFocus={() => setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 150)}
+        <FlatList
+          ref={listRef}
+          style={styles.flex}
+          data={messages}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.messagesList}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+          onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
+          onScrollBeginDrag={Keyboard.dismiss}
+          renderItem={({ item }) => (
+            <MessageBubble
+              message={item}
+              isOwn={item.senderId === currentUserId}
+              senderName={otherUser.displayName}
+              avatarUri={getAvatarUri(otherUser.displayName, otherUser.id)}
+              colors={colors}
+              styles={styles}
+              onOpenSharedPost={handleOpenSharedPost}
+            />
+          )}
         />
-        <Pressable
-          style={[styles.sendButton, !text.trim() && styles.sendDisabled]}
-          onPress={handleSend}
-          disabled={!text.trim() || sending}
+
+        <View
+          style={[
+            styles.inputBar,
+            {
+              paddingBottom: bottomPadding,
+              transform: [{ translateY: -keyboardOffset }],
+            },
+          ]}
         >
-          <Ionicons name="send" size={20} color="#fff" />
-        </Pressable>
+          <TextInput
+            style={styles.input}
+            placeholder="Mensagem..."
+            placeholderTextColor={colors.textMuted}
+            value={text}
+            onChangeText={setText}
+            multiline
+            maxLength={500}
+            onFocus={() => setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 150)}
+          />
+          <Pressable
+            style={[styles.sendButton, !text.trim() && styles.sendDisabled]}
+            onPress={handleSend}
+            disabled={!text.trim() || sending}
+          >
+            <Ionicons name="send" size={20} color="#fff" />
+          </Pressable>
+        </View>
       </View>
-    </View>
+
+      <Modal
+        visible={!!displayPost}
+        animationType="slide"
+        onRequestClose={() => setSharedPost(null)}
+      >
+        <View style={[styles.postModal, { paddingTop: top, backgroundColor: colors.background }]}>
+          <View style={styles.postModalHeader}>
+            <Pressable onPress={() => setSharedPost(null)} hitSlop={12}>
+              <Ionicons name="arrow-back" size={26} color={colors.text} />
+            </Pressable>
+            <Text style={styles.postModalTitle}>Post compartilhado</Text>
+            <View style={{ width: 26 }} />
+          </View>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: bottomPadding }}>
+            {displayPost ? (
+              <PostCard
+                post={displayPost}
+                onLike={toggleLike}
+                onSave={toggleSave}
+                onComment={addComment}
+                getAvatarUri={getAvatarUri}
+              />
+            ) : null}
+          </ScrollView>
+        </View>
+      </Modal>
+    </>
   );
 }
 
@@ -241,6 +303,9 @@ function createStyles(colors) {
       overflow: 'hidden',
       padding: spacing.sm,
     },
+    postSharePressed: {
+      opacity: 0.85,
+    },
     shareLabel: {
       fontSize: 12,
       fontWeight: '600',
@@ -263,6 +328,12 @@ function createStyles(colors) {
       fontSize: 13,
       color: colors.textSecondary,
       marginTop: 2,
+    },
+    shareTapHint: {
+      fontSize: 11,
+      color: colors.textSecondary,
+      marginTop: spacing.sm,
+      fontWeight: '600',
     },
     inputBar: {
       flexDirection: 'row',
@@ -296,6 +367,24 @@ function createStyles(colors) {
     },
     sendDisabled: {
       opacity: 0.4,
+    },
+    postModal: {
+      flex: 1,
+    },
+    postModalHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+      backgroundColor: colors.surface,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    postModalTitle: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: colors.text,
     },
   });
 }

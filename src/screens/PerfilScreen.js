@@ -12,15 +12,15 @@ import {
   Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Avatar from '../components/Avatar';
 import PostCard from '../components/PostCard';
 import { useSocial } from '../context/SocialContext';
 import { useTheme } from '../context/ThemeContext';
+import { useAppInsets } from '../hooks/useAppInsets';
 import spacing from '../theme/spacing';
 
 export default function PerfilScreen({ navigation }) {
-  const insets = useSafeAreaInsets();
+  const { top, bottomPadding } = useAppInsets();
   const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const {
@@ -68,7 +68,7 @@ export default function PerfilScreen({ navigation }) {
   return (
     <>
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <View style={[styles.topBar, { paddingTop: insets.top + spacing.sm }]}>
+      <View style={[styles.topBar, { paddingTop: top + spacing.sm }]}>
         <Pressable
           style={styles.settingsButton}
           onPress={() => navigation.navigate('Settings')}
@@ -181,15 +181,18 @@ export default function PerfilScreen({ navigation }) {
       animationType="slide"
       onRequestClose={() => setSelectedPostId(null)}
     >
-      <View style={[styles.postModal, { backgroundColor: colors.background }]}>
-        <View style={[styles.postModalHeader, { paddingTop: insets.top + spacing.sm }]}>
+      <View style={[styles.postModal, { paddingTop: top, backgroundColor: colors.background }]}>
+        <View style={styles.postModalHeader}>
           <Pressable onPress={() => setSelectedPostId(null)} hitSlop={12}>
             <Ionicons name="arrow-back" size={26} color={colors.text} />
           </Pressable>
           <Text style={styles.postModalTitle}>Publicação</Text>
           <View style={{ width: 26 }} />
         </View>
-        <ScrollView showsVerticalScrollIndicator={false}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingBottom: bottomPadding }}
+        >
           {selectedPost ? (
             <PostCard
               post={selectedPost}

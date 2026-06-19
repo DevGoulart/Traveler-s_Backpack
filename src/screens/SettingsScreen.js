@@ -9,13 +9,13 @@ import {
   Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSocial } from '../context/SocialContext';
 import { useTheme } from '../context/ThemeContext';
+import { useAppInsets } from '../hooks/useAppInsets';
 import spacing from '../theme/spacing';
 
 export default function SettingsScreen({ navigation }) {
-  const insets = useSafeAreaInsets();
+  const { top, bottomPadding } = useAppInsets();
   const { colors, isDark, toggleTheme } = useTheme();
   const { logout } = useSocial();
   const styles = useMemo(() => createStyles(colors), [colors]);
@@ -28,7 +28,7 @@ export default function SettingsScreen({ navigation }) {
   ];
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[styles.container, { paddingTop: top }]}>
       <View style={styles.header}>
         <Pressable onPress={() => navigation.goBack()} hitSlop={12} style={styles.backButton}>
           <Ionicons name="arrow-back" size={26} color={colors.text} />
@@ -37,7 +37,10 @@ export default function SettingsScreen({ navigation }) {
         <View style={styles.headerSpacer} />
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: bottomPadding + spacing.xxl }]}
+      >
         <Text style={styles.sectionTitle}>Conta</Text>
 
         <TouchableOpacity

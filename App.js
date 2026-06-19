@@ -3,9 +3,10 @@ import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
+import spacing from './src/theme/spacing';
 
 import { SocialProvider, useSocial } from './src/context/SocialContext';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
@@ -31,6 +32,8 @@ const Tab = createBottomTabNavigator();
 
 function Tabs() {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  const bottomPadding = Math.max(insets.bottom, spacing.sm);
 
   return (
     <Tab.Navigator
@@ -42,9 +45,9 @@ function Tabs() {
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
-          height: 56,
-          paddingBottom: 6,
-          paddingTop: 6,
+          height: 56 + bottomPadding,
+          paddingBottom: bottomPadding,
+          paddingTop: spacing.sm,
         },
         tabBarIcon: ({ focused, color, size }) => {
           let iconName;
