@@ -23,6 +23,7 @@ import TodoScreen from './src/screens/TodoScreen';
 import DMScreen from './src/screens/DMScreen';
 import ChatScreen from './src/screens/ChatScreen';
 import ActivitiesScreen from './src/screens/ActivitiesScreen';
+import SettingsScreen from './src/screens/SettingsScreen';
 import StoryViewerScreen from './src/screens/StoryViewerScreen';
 
 const Stack = createNativeStackNavigator();
@@ -101,6 +102,7 @@ function RootNavigator() {
               options={{ animation: 'fade', presentation: 'fullScreenModal' }}
             />
             <Stack.Screen name="Activities" component={ActivitiesScreen} />
+            <Stack.Screen name="Settings" component={SettingsScreen} />
             <Stack.Screen name="DM" component={DMScreen} />
             <Stack.Screen name="Chat" component={ChatScreen} />
             <Stack.Screen name="Biometria" component={BiometriaScreen} />

@@ -1,18 +1,43 @@
 import { useMemo, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Image, FlatList, Pressable, Share, Alert, Switch } from 'react-native';
+import {
+  View,
+  Text,
+  ScrollView,
+  StyleSheet,
+  Image,
+  FlatList,
+  Pressable,
+  Share,
+  Alert,
+  Modal,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Avatar from '../components/Avatar';
+import PostCard from '../components/PostCard';
 import { useSocial } from '../context/SocialContext';
 import { useTheme } from '../context/ThemeContext';
 import spacing from '../theme/spacing';
 
 export default function PerfilScreen({ navigation }) {
   const insets = useSafeAreaInsets();
-  const { colors, isDark, toggleTheme } = useTheme();
+  const { colors } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const { currentUser, userBio, profilePhotoUri, userPosts, savedPosts, logout, getAvatarUri, currentUserId } = useSocial();
+  const {
+    currentUser,
+    userBio,
+    profilePhotoUri,
+    userPosts,
+    savedPosts,
+    posts,
+    getAvatarUri,
+    currentUserId,
+    toggleLike,
+    toggleSave,
+    addComment,
+  } = useSocial();
   const [activeTab, setActiveTab] = useState('posts');
+  const [selectedPostId, setSelectedPostId] = useState(null);
 
   const username = currentUser || 'Viajante';
   const bio = userBio || 'Explorador 🌍 | Compartilhando aventuras pelo mundo';
@@ -21,18 +46,14 @@ export default function PerfilScreen({ navigation }) {
   const following = 96;
 
   const gridData = activeTab === 'posts' ? userPosts : savedPosts;
-
-  const botoes = [
-    { nome: 'Biometria', rota: 'Biometria', icon: 'finger-print-outline' },
-    { nome: 'Juros', rota: 'Juros', icon: 'calculator-outline' },
-    { nome: 'Mapa', rota: 'Mapa', icon: 'map-outline' },
-    { nome: 'Todo', rota: 'Todo', icon: 'checkbox-outline' },
-  ];
+  const selectedPost = selectedPostId
+    ? posts.find((p) => p.id === selectedPostId) || gridData.find((p) => p.id === selectedPostId)
+    : null;
 
   const renderGridItem = ({ item }) => {
     const uri = item.imageUri || item.uri;
     return (
-      <Pressable style={styles.gridItem}>
+      <Pressable style={styles.gridItem} onPress={() => setSelectedPostId(item.id)}>
         {uri ? (
           <Image source={{ uri }} style={styles.gridImage} />
         ) : (
@@ -45,8 +66,20 @@ export default function PerfilScreen({ navigation }) {
   };
 
   return (
+    <>
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <View style={[styles.header, { paddingTop: insets.top + spacing.lg }]}>
+      <View style={[styles.topBar, { paddingTop: insets.top + spacing.sm }]}>
+        <Pressable
+          style={styles.settingsButton}
+          onPress={() => navigation.navigate('Settings')}
+          hitSlop={8}
+        >
+          <Ionicons name="settings-outline" size={26} color={colors.text} />
+          <Text style={styles.settingsLabel}>Configurações</Text>
+        </Pressable>
+      </View>
+
+      <View style={styles.header}>
         <View style={styles.profileRow}>
           <Avatar name={username} uri={getAvatarUri(username, currentUserId) || profilePhotoUri} size={86} showRing />
           <View style={styles.stats}>
@@ -141,38 +174,35 @@ export default function PerfilScreen({ navigation }) {
         </View>
       )}
 
-      <View style={styles.utilitiesSection}>
-        <Text style={styles.utilitiesTitle}>Ferramentas</Text>
-
-        <View style={styles.utilityButton}>
-          <Ionicons name={isDark ? 'moon' : 'sunny-outline'} size={22} color={colors.primary} />
-          <Text style={styles.utilityText}>Modo escuro</Text>
-          <Switch
-            value={isDark}
-            onValueChange={toggleTheme}
-            trackColor={{ false: colors.border, true: colors.primaryLight }}
-            thumbColor={colors.surface}
-          />
-        </View>
-
-        {botoes.map((botao) => (
-          <TouchableOpacity
-            key={botao.rota}
-            style={styles.utilityButton}
-            onPress={() => navigation.navigate(botao.rota)}
-          >
-            <Ionicons name={botao.icon} size={22} color={colors.primary} />
-            <Text style={styles.utilityText}>{botao.nome}</Text>
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-          </TouchableOpacity>
-        ))}
-
-        <TouchableOpacity style={styles.logoutButton} onPress={logout}>
-          <Ionicons name="log-out-outline" size={22} color={colors.danger} />
-          <Text style={styles.logoutText}>Sair da conta</Text>
-        </TouchableOpacity>
-      </View>
     </ScrollView>
+
+    <Modal
+      visible={!!selectedPost}
+      animationType="slide"
+      onRequestClose={() => setSelectedPostId(null)}
+    >
+      <View style={[styles.postModal, { backgroundColor: colors.background }]}>
+        <View style={[styles.postModalHeader, { paddingTop: insets.top + spacing.sm }]}>
+          <Pressable onPress={() => setSelectedPostId(null)} hitSlop={12}>
+            <Ionicons name="arrow-back" size={26} color={colors.text} />
+          </Pressable>
+          <Text style={styles.postModalTitle}>Publicação</Text>
+          <View style={{ width: 26 }} />
+        </View>
+        <ScrollView showsVerticalScrollIndicator={false}>
+          {selectedPost ? (
+            <PostCard
+              post={selectedPost}
+              onLike={toggleLike}
+              onSave={toggleSave}
+              onComment={addComment}
+              getAvatarUri={getAvatarUri}
+            />
+          ) : null}
+        </ScrollView>
+      </View>
+    </Modal>
+    </>
   );
 }
 
@@ -184,8 +214,26 @@ function createStyles(colors) {
       flex: 1,
       backgroundColor: colors.background,
     },
+    topBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: spacing.lg,
+      paddingBottom: spacing.sm,
+      backgroundColor: colors.surface,
+    },
+    settingsButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+    },
+    settingsLabel: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.text,
+    },
     header: {
       paddingHorizontal: spacing.lg,
+      paddingTop: spacing.md,
       paddingBottom: spacing.lg,
       backgroundColor: colors.surface,
     },
@@ -293,51 +341,23 @@ function createStyles(colors) {
       marginTop: spacing.xs,
       paddingHorizontal: spacing.xxl,
     },
-    utilitiesSection: {
-      marginTop: spacing.lg,
-      paddingHorizontal: spacing.lg,
-      paddingBottom: spacing.xxl,
+    postModal: {
+      flex: 1,
     },
-    utilitiesTitle: {
+    postModalHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md,
+      backgroundColor: colors.surface,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    postModalTitle: {
       fontSize: 16,
       fontWeight: '700',
       color: colors.text,
-      marginBottom: spacing.md,
-    },
-    utilityButton: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: colors.surface,
-      paddingVertical: spacing.lg,
-      paddingHorizontal: spacing.lg,
-      borderRadius: 12,
-      marginBottom: spacing.sm,
-      gap: spacing.md,
-      borderWidth: 1,
-      borderColor: colors.borderLight,
-    },
-    utilityText: {
-      flex: 1,
-      fontSize: 15,
-      fontWeight: '600',
-      color: colors.text,
-    },
-    logoutButton: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: spacing.sm,
-      marginTop: spacing.md,
-      paddingVertical: spacing.lg,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: colors.danger,
-      backgroundColor: colors.surface,
-    },
-    logoutText: {
-      fontSize: 15,
-      fontWeight: '600',
-      color: colors.danger,
     },
   });
 }

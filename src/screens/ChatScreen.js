@@ -7,10 +7,8 @@ import {
   Pressable,
   StyleSheet,
   Image,
-  KeyboardAvoidingView,
   Platform,
   Keyboard,
-  TouchableWithoutFeedback,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -66,7 +64,6 @@ export default function ChatScreen({ route, navigation }) {
   const listRef = useRef(null);
 
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const headerHeight = insets.top + 56;
 
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
@@ -107,77 +104,75 @@ export default function ChatScreen({ route, navigation }) {
     }
   };
 
-  const inputPaddingBottom = keyboardHeight > 0
-    ? spacing.sm
-    : insets.bottom + spacing.sm;
-
-  const listPaddingBottom = keyboardHeight > 0
-    ? keyboardHeight - insets.bottom + spacing.sm
-    : spacing.sm;
+  const keyboardOffset = Platform.OS === 'android'
+    ? keyboardHeight
+    : Math.max(0, keyboardHeight - insets.bottom);
 
   return (
-    <KeyboardAvoidingView
-      style={styles.flex}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? headerHeight : 0}
-    >
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-        <View style={[styles.container, { paddingTop: insets.top }]}>
-          <View style={styles.header}>
-            <Pressable onPress={() => navigation.goBack()} hitSlop={12}>
-              <Ionicons name="arrow-back" size={26} color={colors.text} />
-            </Pressable>
-            <Avatar
-              name={otherUser.displayName}
-              uri={getAvatarUri(otherUser.displayName, otherUser.id)}
-              size={36}
-            />
-            <Text style={styles.headerName}>{otherUser.displayName}</Text>
-            <View style={{ width: 26 }} />
-          </View>
+    <View style={[styles.flex, { paddingTop: insets.top, backgroundColor: colors.background }]}>
+      <View style={styles.header}>
+        <Pressable onPress={() => navigation.goBack()} hitSlop={12}>
+          <Ionicons name="arrow-back" size={26} color={colors.text} />
+        </Pressable>
+        <Avatar
+          name={otherUser.displayName}
+          uri={getAvatarUri(otherUser.displayName, otherUser.id)}
+          size={36}
+        />
+        <Text style={styles.headerName}>{otherUser.displayName}</Text>
+        <View style={{ width: 26 }} />
+      </View>
 
-          <FlatList
-            ref={listRef}
-            data={messages}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={[styles.messagesList, { paddingBottom: listPaddingBottom }]}
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="interactive"
-            onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
-            renderItem={({ item }) => (
-              <MessageBubble
-                message={item}
-                isOwn={item.senderId === currentUserId}
-                senderName={otherUser.displayName}
-                avatarUri={getAvatarUri(otherUser.displayName, otherUser.id)}
-                colors={colors}
-                styles={styles}
-              />
-            )}
+      <FlatList
+        ref={listRef}
+        style={styles.flex}
+        data={messages}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.messagesList}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+        onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
+        onScrollBeginDrag={Keyboard.dismiss}
+        renderItem={({ item }) => (
+          <MessageBubble
+            message={item}
+            isOwn={item.senderId === currentUserId}
+            senderName={otherUser.displayName}
+            avatarUri={getAvatarUri(otherUser.displayName, otherUser.id)}
+            colors={colors}
+            styles={styles}
           />
+        )}
+      />
 
-          <View style={[styles.inputBar, { paddingBottom: inputPaddingBottom }]}>
-            <TextInput
-              style={styles.input}
-              placeholder="Mensagem..."
-              placeholderTextColor={colors.textMuted}
-              value={text}
-              onChangeText={setText}
-              multiline
-              maxLength={500}
-              onFocus={() => setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 100)}
-            />
-            <Pressable
-              style={[styles.sendButton, !text.trim() && styles.sendDisabled]}
-              onPress={handleSend}
-              disabled={!text.trim() || sending}
-            >
-              <Ionicons name="send" size={20} color="#fff" />
-            </Pressable>
-          </View>
-        </View>
-      </TouchableWithoutFeedback>
-    </KeyboardAvoidingView>
+      <View
+        style={[
+          styles.inputBar,
+          {
+            paddingBottom: insets.bottom + spacing.sm,
+            transform: [{ translateY: -keyboardOffset }],
+          },
+        ]}
+      >
+        <TextInput
+          style={styles.input}
+          placeholder="Mensagem..."
+          placeholderTextColor={colors.textMuted}
+          value={text}
+          onChangeText={setText}
+          multiline
+          maxLength={500}
+          onFocus={() => setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 150)}
+        />
+        <Pressable
+          style={[styles.sendButton, !text.trim() && styles.sendDisabled]}
+          onPress={handleSend}
+          disabled={!text.trim() || sending}
+        >
+          <Ionicons name="send" size={20} color="#fff" />
+        </Pressable>
+      </View>
+    </View>
   );
 }
 
@@ -185,10 +180,6 @@ function createStyles(colors) {
   return StyleSheet.create({
     flex: {
       flex: 1,
-    },
-    container: {
-      flex: 1,
-      backgroundColor: colors.background,
     },
     header: {
       flexDirection: 'row',
@@ -209,6 +200,7 @@ function createStyles(colors) {
     messagesList: {
       padding: spacing.lg,
       gap: spacing.sm,
+      flexGrow: 1,
     },
     bubbleRow: {
       flexDirection: 'row',

@@ -8,7 +8,6 @@ import {
   TextInput,
   Modal,
   FlatList,
-  KeyboardAvoidingView,
   Platform,
   Keyboard,
 } from 'react-native';
@@ -87,9 +86,9 @@ export default function PostCard({ post, onLike, onComment, onShare, onSave, get
       : null;
 
   const authorAvatarUri = getAvatarUri(post.username, post.userId);
-  const inputBottomPadding = keyboardHeight > 0
-    ? keyboardHeight - insets.bottom + spacing.sm
-    : insets.bottom + spacing.sm;
+  const keyboardOffset = Platform.OS === 'android'
+    ? keyboardHeight
+    : Math.max(0, keyboardHeight - insets.bottom);
 
   return (
     <View style={styles.card}>
@@ -157,12 +156,12 @@ export default function PostCard({ post, onLike, onComment, onShare, onSave, get
       <Text style={styles.time}>{timeAgo(post.createdAt)}</Text>
 
       <Modal visible={showComments} animationType="slide" transparent>
-        <KeyboardAvoidingView
-          style={styles.modalFlex}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
+        <View style={styles.modalFlex}>
           <Pressable style={styles.modalOverlay} onPress={() => setShowComments(false)}>
-            <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
+            <Pressable
+              style={[styles.modalContent, { marginBottom: keyboardOffset }]}
+              onPress={(e) => e.stopPropagation()}
+            >
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>Comentários</Text>
                 <Pressable onPress={() => setShowComments(false)}>
@@ -195,7 +194,7 @@ export default function PostCard({ post, onLike, onComment, onShare, onSave, get
                 )}
               />
 
-              <View style={[styles.commentInputRow, { paddingBottom: inputBottomPadding }]}>
+              <View style={[styles.commentInputRow, { paddingBottom: insets.bottom + spacing.sm }]}>
                 <TextInput
                   style={styles.commentInput}
                   placeholder="Adicionar comentário..."
@@ -213,7 +212,7 @@ export default function PostCard({ post, onLike, onComment, onShare, onSave, get
               </View>
             </Pressable>
           </Pressable>
-        </KeyboardAvoidingView>
+        </View>
       </Modal>
     </View>
   );
