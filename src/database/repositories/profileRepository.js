@@ -1,6 +1,18 @@
 import * as settingsRepo from './settingsRepository';
+import * as authRepo from './authRepository';
 
 export async function getProfile(db) {
+  const sessionUser = await authRepo.getSessionUser(db);
+
+  if (sessionUser) {
+    return {
+      userId: sessionUser.id,
+      username: sessionUser.displayName,
+      bio: sessionUser.bio || '',
+      avatarUri: sessionUser.avatarUri || null,
+    };
+  }
+
   const [username, bio, avatarUri] = await Promise.all([
     settingsRepo.getSetting(db, 'current_user'),
     settingsRepo.getSetting(db, 'user_bio'),
@@ -8,22 +20,23 @@ export async function getProfile(db) {
   ]);
 
   return {
+    userId: null,
     username: username || null,
     bio: bio || '',
     avatarUri: avatarUri || null,
   };
 }
 
-export async function updateUserProfile(db, { oldUsername, newUsername, bio, avatarUri }) {
+export async function updateUserProfile(db, { userId, oldUsername, newUsername, bio, avatarUri }) {
   const trimmedName = newUsername.trim();
-  const oldUserId = oldUsername?.toLowerCase();
-  const newUserId = trimmedName.toLowerCase();
+  const oldUserId = userId || oldUsername?.toLowerCase();
+  const newUserId = userId || trimmedName.toLowerCase();
 
   await db.withTransactionAsync(async () => {
     if (oldUsername && oldUsername !== trimmedName) {
       await db.runAsync(
-        'UPDATE posts SET username = ?, user_id = ? WHERE username = ? OR user_id = ?',
-        [trimmedName, newUserId, oldUsername, oldUserId]
+        'UPDATE posts SET username = ?, user_id = ? WHERE user_id = ? OR username = ?',
+        [trimmedName, newUserId, oldUserId, oldUsername]
       );
 
       await db.runAsync(
@@ -37,8 +50,8 @@ export async function updateUserProfile(db, { oldUsername, newUsername, bio, ava
       );
 
       await db.runAsync(
-        'UPDATE story_items SET username = ?, user_id = ? WHERE username = ? OR user_id = ?',
-        [trimmedName, newUserId, oldUsername, oldUserId]
+        'UPDATE story_items SET username = ?, user_id = ? WHERE user_id = ? OR username = ?',
+        [trimmedName, newUserId, oldUserId, oldUsername]
       );
 
       await db.runAsync(
@@ -52,6 +65,15 @@ export async function updateUserProfile(db, { oldUsername, newUsername, bio, ava
           [newUserId, oldUserId]
         );
       }
+    }
+
+    if (userId) {
+      await authRepo.updateUserRecord(db, {
+        userId,
+        displayName: trimmedName,
+        bio: bio ?? '',
+        avatarUri: avatarUri ?? null,
+      });
     }
 
     await settingsRepo.setSetting(db, 'current_user', trimmedName);

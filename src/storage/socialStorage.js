@@ -3,6 +3,7 @@ import * as postsRepo from '../database/repositories/postsRepository';
 import * as storiesRepo from '../database/repositories/storiesRepository';
 import * as settingsRepo from '../database/repositories/settingsRepository';
 import * as profileRepo from '../database/repositories/profileRepository';
+import * as authRepo from '../database/repositories/authRepository';
 import { DEMO_POSTS, DEMO_STORIES, isStoryExpired, filterActiveStories } from '../database/schema';
 
 export { DEMO_POSTS, DEMO_STORIES, isStoryExpired, filterActiveStories };
@@ -92,10 +93,40 @@ export async function saveUserBio(bio) {
   }
 }
 
-export async function updateUserProfile({ oldUsername, newUsername, bio, avatarUri }) {
+export async function updateUserProfile({ userId, oldUsername, newUsername, bio, avatarUri }) {
   await initDatabase();
   const db = await getDatabase();
-  await profileRepo.updateUserProfile(db, { oldUsername, newUsername, bio, avatarUri });
+  await profileRepo.updateUserProfile(db, { userId, oldUsername, newUsername, bio, avatarUri });
+}
+
+export async function loginUser(credentials) {
+  await initDatabase();
+  const db = await getDatabase();
+  return authRepo.loginUser(db, credentials);
+}
+
+export async function registerUser(data) {
+  await initDatabase();
+  const db = await getDatabase();
+  return authRepo.registerUser(db, data);
+}
+
+export async function logoutUser() {
+  await initDatabase();
+  const db = await getDatabase();
+  await authRepo.clearSession(db);
+}
+
+export async function getSessionUser() {
+  await initDatabase();
+  const db = await getDatabase();
+  return authRepo.getSessionUser(db);
+}
+
+export async function restoreBiometricSession() {
+  await initDatabase();
+  const db = await getDatabase();
+  return authRepo.restoreBiometricSession(db);
 }
 
 export async function loadCameraHistory() {

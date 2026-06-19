@@ -1,16 +1,18 @@
+import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
-import { SocialProvider } from './src/context/SocialContext';
+import { SocialProvider, useSocial } from './src/context/SocialContext';
 import HomeScreen from './src/screens/HomeScreen';
 import ExploreScreen from './src/screens/ExploreScreen';
 import CameraScreen from './src/screens/CameraScreen';
 import PerfilScreen from './src/screens/PerfilScreen';
 import EditProfileScreen from './src/screens/EditProfileScreen';
 import LoginScreen from './src/screens/LoginScreen';
+import RegisterScreen from './src/screens/RegisterScreen';
 import BiometriaScreen from './src/screens/BiometriaScreen';
 import JurosScreen from './src/screens/JurosScreen';
 import MapScreen from './src/screens/MapScreen';
@@ -61,31 +63,64 @@ function Tabs() {
   );
 }
 
+function RootNavigator() {
+  const { isAuthenticated, authReady } = useSocial();
+
+  if (!authReady) {
+    return (
+      <View style={styles.loading}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      {isAuthenticated ? (
+        <>
+          <Stack.Screen name="Home" component={Tabs} />
+          <Stack.Screen
+            name="EditProfile"
+            component={EditProfileScreen}
+            options={{ presentation: 'modal' }}
+          />
+          <Stack.Screen
+            name="StoryViewer"
+            component={StoryViewerScreen}
+            options={{ animation: 'fade', presentation: 'fullScreenModal' }}
+          />
+          <Stack.Screen name="Biometria" component={BiometriaScreen} />
+          <Stack.Screen name="Juros" component={JurosScreen} />
+          <Stack.Screen name="Mapa" component={MapScreen} />
+          <Stack.Screen name="Todo" component={TodoScreen} />
+        </>
+      ) : (
+        <>
+          <Stack.Screen name="Login" component={LoginScreen} />
+          <Stack.Screen name="Register" component={RegisterScreen} />
+        </>
+      )}
+    </Stack.Navigator>
+  );
+}
+
 export default function App() {
   return (
     <SafeAreaProvider>
       <SocialProvider>
         <NavigationContainer>
-          <Stack.Navigator>
-            <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
-            <Stack.Screen name="Home" component={Tabs} options={{ headerShown: false }} />
-            <Stack.Screen
-              name="EditProfile"
-              component={EditProfileScreen}
-              options={{ headerShown: false, presentation: 'modal' }}
-            />
-            <Stack.Screen
-              name="StoryViewer"
-              component={StoryViewerScreen}
-              options={{ headerShown: false, animation: 'fade', presentation: 'fullScreenModal' }}
-            />
-            <Stack.Screen name="Biometria" component={BiometriaScreen} />
-            <Stack.Screen name="Juros" component={JurosScreen} />
-            <Stack.Screen name="Mapa" component={MapScreen} />
-            <Stack.Screen name="Todo" component={TodoScreen} />
-          </Stack.Navigator>
+          <RootNavigator />
         </NavigationContainer>
       </SocialProvider>
     </SafeAreaProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  loading: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.background,
+  },
+});

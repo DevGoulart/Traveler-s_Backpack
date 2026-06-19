@@ -8,7 +8,7 @@ import spacing from '../theme/spacing';
 
 export default function PerfilScreen({ navigation }) {
   const insets = useSafeAreaInsets();
-  const { currentUser, userBio, profilePhotoUri, userPosts } = useSocial();
+  const { currentUser, userBio, profilePhotoUri, userPosts, logout } = useSocial();
 
   const username = currentUser || 'Viajante';
   const bio = userBio || 'Explorador 🌍 | Compartilhando aventuras pelo mundo';
@@ -126,6 +126,11 @@ export default function PerfilScreen({ navigation }) {
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </TouchableOpacity>
         ))}
+
+        <TouchableOpacity style={styles.logoutButton} onPress={logout}>
+          <Ionicons name="log-out-outline" size={22} color={colors.danger} />
+          <Text style={styles.logoutText}>Sair da conta</Text>
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );
@@ -278,5 +283,22 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: colors.text,
+  },
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+    paddingVertical: spacing.lg,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.danger,
+    backgroundColor: colors.surface,
+  },
+  logoutText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.danger,
   },
 });

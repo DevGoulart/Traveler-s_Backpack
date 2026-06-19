@@ -5,6 +5,7 @@ import * as postsRepo from './repositories/postsRepository';
 import * as storiesRepo from './repositories/storiesRepository';
 import * as cameraRepo from './repositories/cameraRepository';
 import * as settingsRepo from './repositories/settingsRepository';
+import * as authRepo from './repositories/authRepository';
 
 const DB_NAME = 'travelers_backpack.db';
 
@@ -136,6 +137,29 @@ export async function initDatabase() {
   const db = await getDatabase();
   await db.execAsync(SCHEMA);
   await migrateFromAsyncStorage(db);
+  await authRepo.seedDefaultUsers(db);
+  await migrateLegacySession(db);
   await seedDemoData(db);
   return db;
+}
+
+async function migrateLegacySession(db) {
+  const migrated = await settingsRepo.getSetting(db, 'migrated_auth_v1');
+  if (migrated === 'true') return;
+
+  const existingSession = await authRepo.getSessionUserId(db);
+  if (!existingSession) {
+    const legacyUser = await settingsRepo.getSetting(db, 'current_user');
+    if (legacyUser) {
+      const match = await db.getFirstAsync(
+        'SELECT id FROM users WHERE display_name = ? OR login = ?',
+        [legacyUser, legacyUser.toLowerCase()]
+      );
+      if (match) {
+        await authRepo.setSessionUserId(db, match.id);
+      }
+    }
+  }
+
+  await settingsRepo.setSetting(db, 'migrated_auth_v1', 'true');
 }
