@@ -134,10 +134,28 @@ async function seedDemoData(db) {
   }
 }
 
+async function migratePostLocationCoords(db) {
+  const migrated = await settingsRepo.getSetting(db, 'migrated_post_coords_v1');
+  if (migrated === 'true') return;
+
+  const columns = await db.getAllAsync('PRAGMA table_info(posts)');
+  const names = columns.map((col) => col.name);
+
+  if (!names.includes('location_lat')) {
+    await db.execAsync('ALTER TABLE posts ADD COLUMN location_lat REAL');
+  }
+  if (!names.includes('location_lng')) {
+    await db.execAsync('ALTER TABLE posts ADD COLUMN location_lng REAL');
+  }
+
+  await settingsRepo.setSetting(db, 'migrated_post_coords_v1', 'true');
+}
+
 export async function initDatabase() {
   const db = await getDatabase();
   await db.execAsync(SCHEMA);
   await migrateFromAsyncStorage(db);
+  await migratePostLocationCoords(db);
   await authRepo.seedDefaultUsers(db);
   await migrateLegacySession(db);
   await seedDemoData(db);

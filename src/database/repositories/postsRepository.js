@@ -3,6 +3,26 @@ export async function countPosts(db) {
   return row?.count ?? 0;
 }
 
+function mapPostRow(row, { liked = false, saved = false, comments = [] } = {}) {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    username: row.username,
+    imageUri: row.image_uri,
+    uri: row.image_uri,
+    description: row.description,
+    location: row.location,
+    locationLat: row.location_lat ?? null,
+    locationLng: row.location_lng ?? null,
+    likes: row.likes_count,
+    liked,
+    saved,
+    createdAt: row.created_at,
+    isDemo: row.is_demo === 1,
+    comments,
+  };
+}
+
 export async function getAllPosts(db, currentUsername) {
   const rows = await db.getAllAsync(
     'SELECT * FROM posts ORDER BY datetime(created_at) DESC'
@@ -31,21 +51,7 @@ export async function getAllPosts(db, currentUsername) {
       saved = !!saveRow;
     }
 
-    posts.push({
-      id: row.id,
-      userId: row.user_id,
-      username: row.username,
-      imageUri: row.image_uri,
-      uri: row.image_uri,
-      description: row.description,
-      location: row.location,
-      likes: row.likes_count,
-      liked,
-      saved,
-      createdAt: row.created_at,
-      isDemo: row.is_demo === 1,
-      comments,
-    });
+    posts.push(mapPostRow(row, { liked, saved, comments }));
   }
 
   return posts;
@@ -54,8 +60,8 @@ export async function getAllPosts(db, currentUsername) {
 export async function insertPost(db, post) {
   await db.runAsync(
     `INSERT OR REPLACE INTO posts
-      (id, user_id, username, image_uri, description, location, likes_count, created_at, is_demo)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (id, user_id, username, image_uri, description, location, location_lat, location_lng, likes_count, created_at, is_demo)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       post.id,
       post.userId,
@@ -63,6 +69,8 @@ export async function insertPost(db, post) {
       post.imageUri,
       post.description || '',
       post.location || null,
+      post.locationLat ?? null,
+      post.locationLng ?? null,
       post.likes || 0,
       post.createdAt || new Date().toISOString(),
       post.isDemo || 0,
@@ -93,6 +101,8 @@ export async function createPost(db, postData) {
     imageUri: postData.imageUri || postData.uri,
     description: postData.description || '',
     location: postData.location || null,
+    locationLat: postData.locationLat ?? null,
+    locationLng: postData.locationLng ?? null,
     likes: 0,
     createdAt: new Date().toISOString(),
     isDemo: 0,
@@ -146,24 +156,20 @@ export async function getSavedPosts(db, currentUsername) {
       [row.id, currentUsername]
     );
 
-    posts.push({
-      id: row.id,
-      userId: row.user_id,
-      username: row.username,
-      imageUri: row.image_uri,
-      uri: row.image_uri,
-      description: row.description,
-      location: row.location,
-      likes: row.likes_count,
-      liked: !!likeRow,
-      saved: true,
-      createdAt: row.created_at,
-      isDemo: row.is_demo === 1,
-      comments,
-    });
+    posts.push(mapPostRow(row, { liked: !!likeRow, saved: true, comments }));
   }
 
   return posts;
+}
+
+export async function getPostsWithLocation(db) {
+  const rows = await db.getAllAsync(
+    `SELECT * FROM posts
+     WHERE location_lat IS NOT NULL AND location_lng IS NOT NULL
+     ORDER BY datetime(created_at) DESC`
+  );
+
+  return rows.map((row) => mapPostRow(row));
 }
 
 export async function getPostOwner(db, postId) {

@@ -16,6 +16,8 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSocial } from '../context/SocialContext';
 import { loadCameraHistory, saveCameraPhoto } from '../storage/socialStorage';
+import LocationPickerModal from '../components/LocationPickerModal';
+import { getCurrentPlace } from '../services/googlePlaces';
 import { useTheme } from '../context/ThemeContext';
 import { useAppInsets } from '../hooks/useAppInsets';
 import spacing from '../theme/spacing';
@@ -44,6 +46,8 @@ export default function CameraScreen() {
   const [facing, setFacing] = useState('back');
   const [flash, setFlash] = useState('off');
   const [capturing, setCapturing] = useState(false);
+  const [selectedLocation, setSelectedLocation] = useState(null);
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
 
   const { currentUser, addPost, addStory } = useSocial();
 
@@ -145,15 +149,31 @@ export default function CameraScreen() {
     loadHistory();
   }, []);
 
-  const openPreview = (photo) => {
+  const openPreview = async (photo) => {
     setSelectedPhoto(photo);
     setCaption('');
+
+    if (photo.locationLat != null && photo.locationLng != null) {
+      setSelectedLocation({
+        id: photo.id,
+        name: photo.locationShort || photo.locationName || 'Local',
+        address: photo.locationShort || '',
+        latitude: photo.locationLat,
+        longitude: photo.locationLng,
+        displayName: photo.locationShort || photo.locationName || 'Local',
+      });
+    } else {
+      const current = await getCurrentPlace();
+      setSelectedLocation(current);
+    }
+
     setPreviewVisible(true);
   };
 
   const closePreview = () => {
     setPreviewVisible(false);
     setCaption('');
+    setSelectedLocation(null);
   };
 
   const takePhoto = async () => {
@@ -169,11 +189,15 @@ export default function CameraScreen() {
       }
 
       const location = await buildLocationDescription();
+      const currentPlace = await getCurrentPlace();
       const newItem = {
         id: Date.now().toString(),
         uri,
         description: location.full,
-        locationShort: location.short,
+        locationShort: currentPlace?.displayName || location.short,
+        locationName: currentPlace?.name || location.short,
+        locationLat: currentPlace?.latitude ?? null,
+        locationLng: currentPlace?.longitude ?? null,
         createdAt: new Date().toISOString(),
       };
 
@@ -208,7 +232,9 @@ export default function CameraScreen() {
           imageUri: selectedPhoto.uri,
           uri: selectedPhoto.uri,
           description: caption.trim() || 'Nova aventura! 🌍',
-          location: selectedPhoto.locationShort,
+          location: selectedLocation?.displayName || selectedPhoto.locationShort || null,
+          locationLat: selectedLocation?.latitude ?? selectedPhoto.locationLat ?? null,
+          locationLng: selectedLocation?.longitude ?? selectedPhoto.locationLng ?? null,
         });
       }
 
@@ -252,6 +278,7 @@ export default function CameraScreen() {
 
   if (previewVisible && selectedPhoto) {
     return (
+      <>
       <View style={styles.blackScreen}>
         <Image source={{ uri: selectedPhoto.uri }} style={styles.previewImage} resizeMode="cover" />
 
@@ -278,14 +305,18 @@ export default function CameraScreen() {
             />
           )}
 
-          {selectedPhoto.locationShort ? (
-            <View style={styles.locationRow}>
-              <Ionicons name="location-outline" size={16} color="#fff" />
-              <Text style={styles.locationText} numberOfLines={1}>
-                {selectedPhoto.locationShort}
+          {publishMode === 'post' && (
+            <Pressable
+              style={styles.locationPickerButton}
+              onPress={() => setShowLocationPicker(true)}
+            >
+              <Ionicons name="location-outline" size={18} color="#fff" />
+              <Text style={styles.locationPickerText} numberOfLines={1}>
+                {selectedLocation?.displayName || 'Adicionar localização'}
               </Text>
-            </View>
-          ) : null}
+              <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.7)" />
+            </Pressable>
+          )}
 
           <Pressable
             style={[styles.shareButton, publishing && styles.shareButtonDisabled]}
@@ -302,6 +333,14 @@ export default function CameraScreen() {
           </Pressable>
         </View>
       </View>
+
+      <LocationPickerModal
+        visible={showLocationPicker}
+        onClose={() => setShowLocationPicker(false)}
+        onSelect={setSelectedLocation}
+        initialLocation={selectedLocation}
+      />
+      </>
     );
   }
 
@@ -537,15 +576,19 @@ function createStyles(colors) {
       borderBottomColor: 'rgba(255,255,255,0.3)',
       paddingVertical: spacing.sm,
     },
-    locationRow: {
+    locationPickerButton: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: spacing.xs,
+      gap: spacing.sm,
+      paddingVertical: spacing.sm,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: 'rgba(255,255,255,0.2)',
     },
-    locationText: {
-      color: 'rgba(255,255,255,0.85)',
-      fontSize: 13,
+    locationPickerText: {
       flex: 1,
+      color: '#fff',
+      fontSize: 14,
+      fontWeight: '600',
     },
     shareButton: {
       backgroundColor: colors.primary,
